@@ -1,0 +1,26 @@
+{
+  "title": "Synthetic transcript selection discrepancy",
+  "synthetic": true,
+  "snapshots": [
+    {
+      "id": "run-A", "label": "Analysis A · transcript TX-DEMO-1.1",
+      "variant": {"assembly": "GRCh38", "sequence_id": "NC_000001.11", "position": 101, "ref": "AC", "alt": "AT", "reference_context": {"start": 100, "sequence": "GACGTACG"}},
+      "annotation": {"gene_id": "GENE-DEMO-1", "transcript_id": "TX-DEMO-1.1", "consequence": "missense_variant", "protein_consequence": "p.Demo1AlaVal"},
+      "provenance": {"tool": "synthetic-lookup", "tool_version": "1.0", "source_name": "GenomeDebugger synthetic fixture", "source_release": "2026-demo-1", "configuration": {"mode": "selected-transcript"}}
+    },
+    {
+      "id": "run-B", "label": "Analysis B · transcript TX-DEMO-2.1",
+      "variant": {"assembly": "GRCh38", "sequence_id": "NC_000001.11", "position": 102, "ref": "C", "alt": "T", "reference_context": {"start": 100, "sequence": "GACGTACG"}},
+      "annotation": {"gene_id": "GENE-DEMO-1", "transcript_id": "TX-DEMO-2.1", "consequence": "intron_variant", "protein_consequence": null},
+      "provenance": {"tool": "synthetic-lookup", "tool_version": "1.0", "source_name": "GenomeDebugger synthetic fixture", "source_release": "2026-demo-1", "configuration": {"mode": "selected-transcript"}}
+    }
+  ],
+  "controlled_lookup": {
+    "kind": "synthetic_transcript_lookup", "id": "lookup-demo-1", "description": "Synthetic and deliberately small transcript consequence table; no real gene or clinical data.",
+    "variant": {"assembly": "GRCh38", "sequence_id": "NC_000001.11", "position": 102, "ref": "C", "alt": "T", "reference_context": {"start": 100, "sequence": "GACGTACG"}},
+    "rows": [
+      {"transcript_id": "TX-DEMO-1.1", "gene_id": "GENE-DEMO-1", "consequence": "missense_variant", "protein_consequence": "p.Demo1AlaVal"},
+      {"transcript_id": "TX-DEMO-2.1", "gene_id": "GENE-DEMO-1", "consequence": "intron_variant", "protein_consequence": null}
+    ]
+  }
+}
