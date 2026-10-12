@@ -6,3 +6,7 @@ export interface Evidence { id: string; kind: string; description: string; data:
 export interface Difference {field: string; category: string; before: string | null; after: string | null; meaningful: boolean; evidence_ids: string[] }
 export interface Finding {status: Status; cause: string; explanation: string; affected_fields: string[]; evidence_ids: string[] }
 export interface Result {id: string; input: InvestigationInput; identity: {status: Status; explanation: string; normalized_a?: string; normalized_b?: string; evidence_ids: string[]}; differences: Difference[]; findings: Finding[]; evidence: Evidence[]; input_sha256: string }
+export interface RegressionCase {id: string; name: string; schema_version: number; created_at: string; source_investigation: Result }
+export interface RegressionCheck {path: string; expected: unknown; actual: unknown; passed: boolean; required: boolean }
+export interface RegressionRun {id: string; case_id: string; created_at: string; mode: 'pinned'|'candidate'; status: 'passed'|'failed'; baseline_input_sha256: string; candidate_input_sha256: string; checks: RegressionCheck[]; input_changes: string[]; actual: Result }
+export interface RegressionRunSummary {id: string; created_at: string; mode: 'pinned'|'candidate'; status: 'passed'|'failed'}

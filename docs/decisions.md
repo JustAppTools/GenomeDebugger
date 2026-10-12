@@ -15,3 +15,7 @@ Use exact assembly/accession/context equality and substitution-only flank trimmi
 ## 2026-10-11: Qualitative explanations
 
 Finding statuses express what was tested. No numeric confidence score is emitted. A changed database release alone is only a possible contributor.
+
+## 2026-10-11: Immutable regression baselines
+
+Save the complete source investigation inside each regression case. Pinned runs require evidence hashes to match; candidate runs require expected outputs and findings but show evidence drift separately. This permits a new pipeline version to pass when its output remains stable without hiding changes in supporting inputs. Candidate variants must exactly match the saved representations until a validated equivalence service exists.

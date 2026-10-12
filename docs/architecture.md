@@ -2,7 +2,7 @@
 
 ## Current system
 
-The React/TypeScript frontend loads or accepts `InvestigationInput` JSON, sends it to the local FastAPI backend, and displays the returned `InvestigationResult`. The backend has four separate responsibilities: Pydantic schema validation (`models.py`), deterministic comparison (`engine.py`), SQLite persistence (`storage.py`), and Markdown reporting (`report.py`). `main.py` exposes a small API. No comparison logic makes network calls.
+The React/TypeScript frontend loads or accepts `InvestigationInput` JSON, sends it to the local FastAPI backend, and displays the returned `InvestigationResult`. The backend separates Pydantic schema validation (`models.py`), deterministic comparison (`engine.py`), immutable regression assertions (`regression.py`), SQLite persistence (`storage.py`), and Markdown reporting (`report.py`). `main.py` exposes the API. No comparison logic makes network calls.
 
 ```mermaid
 flowchart LR
@@ -22,6 +22,8 @@ flowchart LR
 - `Annotation`: gene and transcript IDs, molecular consequence, optional protein consequence, optional clinical assertion. The latter carries framework and condition ID to prevent inappropriate direct comparisons.
 - `ControlledLookup`: optional synthetic table bound to a variant. A replay selects transcript rows from the same table and checks all recorded gene/consequence/protein outputs. A unique transcript ID is required per row.
 - `InvestigationResult`: canonical-input SHA-256, variant identity result, field differences, findings, and individually addressable evidence objects. Findings contain evidence IDs and a qualitative status (`verified`, `probable`, `possible`, `unresolved`). The current engine does not emit `probable` because it has no calibrated supporting rule for that category.
+- `RegressionCase`: immutable copy of one saved investigation and its expected observations, with case schema version and creation time. It is stored separately from the source investigation, so a later source-record change cannot change the baseline.
+- `RegressionRun`: pinned or candidate mode, actual recomputed result, required checks, evidence-hash checks, changed input paths, and pass/fail status. A candidate must preserve each original submitted variant exactly; changes to tool or source versions are recorded and may still pass if expected outputs hold.
 
 ## Comparison decisions
 

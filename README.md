@@ -1,6 +1,6 @@
 # GenomeDebugger
 
-GenomeDebugger is a local, research-oriented workstation for comparing two genomic analysis snapshots and tracing why their results differ. Version 0.1.0 demonstrates an end-to-end synthetic transcript-selection investigation. It does **not** assign clinical pathogenicity or query external services.
+GenomeDebugger is a local, research-oriented workstation for comparing two genomic analysis snapshots and tracing why their results differ. Version 0.2.0 demonstrates an end-to-end synthetic transcript-selection investigation and turns it into a reusable regression case. It does **not** assign clinical pathogenicity or query external services.
 
 ## Start on Windows
 
@@ -38,6 +38,7 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Select **Load synthetic dem
 - Field-level differences with a meaningful-change filter. Clinical classification is compared only for matching condition IDs and frameworks.
 - Candidate findings linked to evidence. The synthetic demo replays the same lookup table with two transcript selections and verifies that the outputs match the supplied snapshots while tool, source release, configuration, and allele identity are held constant.
 - Local SQLite storage, investigation retrieval, JSON export, and Markdown report export with SHA-256 hash of canonicalized input JSON.
+- Immutable regression cases captured from saved investigations. Rerun a pinned case after an engine change, or paste candidate outputs for the same variant descriptions. The workbench shows pass/fail, failed fields, changed evidence, input drift, and saved run history.
 - No user data is sent to third-party APIs. POST bodies are limited to 1 MB.
 
 The synthetic `GENE-DEMO-1`, transcript names, and protein labels are fabricated. They are not ClinVar or Ensembl assertions. “Verified” in the demo means verified **within the supplied controlled synthetic fixture**, not independently confirmed against a biological reference assembly or external annotation system.
@@ -54,6 +55,12 @@ Invoke-RestMethod -Uri http://127.0.0.1:8000/api/investigations -Method Post -Co
 
 The API response contains `input`, `identity`, `differences`, `findings`, `evidence`, and `input_sha256`. A saved record is retrieved at `/api/investigations/{id}` and its Markdown report at `/api/investigations/{id}/report.md`.
 
+## Regression workflow
+
+After running an investigation, open **Regression** and save a named baseline. **Run pinned baseline** recomputes the saved input with the current engine and requires the same annotations, identity status, field differences, findings, and evidence data. **Check candidate** accepts new structured snapshot JSON for the exact same submitted variants. It checks expected outputs and findings, while listing provenance and evidence changes separately. Candidate evidence changes are informative and do not fail an otherwise matching output assertion. Both modes save their run results locally. After restarting the browser, reopen the investigation from **Recent investigations** to access its saved regression case and run history.
+
+API equivalents: `POST /api/investigations/{id}/regression-cases` with `{"name":"..."}`, then `POST /api/regression-cases/{case_id}/runs` with `{}` for pinned replay or `{"candidate": <InvestigationInput>}` for a candidate. Retrieve saved cases and runs with the corresponding GET endpoints in `/docs`.
+
 ## Tests
 
 ```powershell
@@ -66,4 +73,4 @@ npm audit
 
 ## Current boundaries
 
-There is no reference-genome download, independent sequence verification, repeat-aware indel normalization, HGVS/SPDI/VRS conversion, liftover, ClinVar or VEP adapter, historical timeline, or saved regression-test runner yet. Snapshot values are user supplied and are not externally authenticated. The application is a research and bioinformatics quality-assurance tool, not a clinical device. See [scientific validity](docs/scientific-validity.md) and [roadmap](docs/roadmap.md).
+There is no reference-genome download, independent sequence verification, repeat-aware indel normalization, HGVS/SPDI/VRS conversion, liftover, ClinVar or VEP adapter, or historical timeline yet. Regression checks rerun the comparison engine against submitted snapshots; they do not execute an external annotation pipeline. Snapshot values are user supplied and are not externally authenticated. The application is a research and bioinformatics quality-assurance tool, not a clinical device. See [scientific validity](docs/scientific-validity.md) and [roadmap](docs/roadmap.md).
