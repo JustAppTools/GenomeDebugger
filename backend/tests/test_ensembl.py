@@ -60,6 +60,23 @@ def test_reference_mismatch_stops_before_vep_request():
             raise AssertionError("wrong reference was accepted")
 
 
+def test_multiple_consequence_terms_are_preserved_without_collapsing():
+    base_transport = fixture_transport()
+    def handler(request):
+        response = base_transport.handle_request(request)
+        if request.url.path.startswith("/vep/human/region/"):
+            body = response.json()
+            body[0]["transcript_consequences"][0]["consequence_terms"] = ["intron_variant", "non_coding_transcript_variant"]
+            return httpx.Response(200, json=body)
+        return response
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        record = fetch_record(QUERY, client)
+    assert record.transcripts[0].consequence_terms == ["intron_variant", "non_coding_transcript_variant"]
+    from app.ensembl import CompareTranscripts
+    payload = comparison_input(record, CompareTranscripts(transcript_a="ENST00000377705", transcript_b="ENST00000400913"))
+    assert payload.snapshots[0].annotation.consequence == "intron_variant;non_coding_transcript_variant"
+
+
 def test_cache_only_and_live_failure_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DB", tmp_path / "test.db")
     calls = []

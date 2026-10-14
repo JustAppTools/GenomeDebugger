@@ -31,5 +31,8 @@ def markdown_report(result: InvestigationResult) -> str:
     lines.extend(["", "## Reproduction", "", "1. Save the JSON report from the application.", "2. POST its `input` object to `/api/investigations` using the same GenomeDebugger version.", "3. Compare the returned `input_sha256`, identity, differences, findings, and evidence.", ""])
     if public_source:
         lines.extend(["The Ensembl response was current when retrieved. Its reported release and transcript comparison do not establish historical causation.", ""])
+        check_id = a.provenance.configuration.get("reference_check_id")
+        if check_id:
+            lines.extend([f"Linked NCBI allele check: `{check_id}` ({a.provenance.configuration.get('reference_check_status', 'status unknown')}). Retrieve its preserved responses at `/api/sources/reference-checks/{check_id}`. This does not validate VEP consequences.", ""])
     lines.extend(["This report is for research and quality assurance; it is not a clinical interpretation.", ""])
     return "\n".join(lines)

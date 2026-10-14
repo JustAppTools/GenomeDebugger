@@ -46,7 +46,7 @@ class ClinicalAssertion(StrictModel):
 class Annotation(StrictModel):
     gene_id: str = Field(min_length=1, max_length=100)
     transcript_id: str = Field(min_length=1, max_length=100)
-    consequence: str = Field(min_length=1, max_length=100)
+    consequence: str = Field(min_length=1, max_length=500)
     protein_consequence: str | None = None
     clinical: ClinicalAssertion | None = None
 
@@ -91,11 +91,34 @@ class ControlledLookup(StrictModel):
         return self
 
 
+class ReferenceCheckSummary(StrictModel):
+    id: str = Field(min_length=1, max_length=100)
+    source_record_id: str = Field(min_length=1, max_length=100)
+    source_response_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    refseq_accession: str = Field(min_length=1, max_length=100)
+    expected_reference: str = Field(pattern=r"^[ACGT]$")
+    observed_reference: str = Field(pattern=r"^[ACGT]$")
+    reference_matches: bool
+    spdi_matches: bool
+    hgvs_matches: bool
+    status: Literal["agree", "disagree"]
+
+    @model_validator(mode="after")
+    def consistent_status(self):
+        agrees = all((self.reference_matches, self.spdi_matches, self.hgvs_matches))
+        if (self.status == "agree") != agrees:
+            raise ValueError("reference check status disagrees with its check flags")
+        if self.reference_matches != (self.expected_reference == self.observed_reference):
+            raise ValueError("reference_matches disagrees with observed base")
+        return self
+
+
 class InvestigationInput(StrictModel):
     title: str = Field(min_length=1, max_length=200)
     synthetic: bool = False
     snapshots: list[Snapshot] = Field(min_length=2, max_length=2)
     controlled_lookup: ControlledLookup | None = None
+    reference_check: ReferenceCheckSummary | None = None
 
     @model_validator(mode="after")
     def unique_ids(self):
@@ -103,6 +126,15 @@ class InvestigationInput(StrictModel):
             raise ValueError("snapshot IDs must differ")
         if self.controlled_lookup and not self.synthetic:
             raise ValueError("synthetic lookup requires synthetic=true")
+        if self.reference_check:
+            check = self.reference_check
+            for snapshot in self.snapshots:
+                if snapshot.variant.ref != check.expected_reference:
+                    raise ValueError("reference check allele does not match snapshot")
+                if snapshot.provenance.configuration.get("source_record_id") != check.source_record_id:
+                    raise ValueError("reference check source record does not match snapshot")
+                if snapshot.provenance.input_sha256 != check.source_response_sha256:
+                    raise ValueError("reference check source hash does not match snapshot")
         return self
 
 

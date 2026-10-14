@@ -3,6 +3,7 @@ from pathlib import Path
 from .models import InvestigationResult
 from .regression import RegressionCase, RegressionRun
 from .ensembl import SourceQuery, SourceRecord
+from .ncbi import ReferenceCheck
 
 
 def initialize(path: Path):
@@ -13,6 +14,30 @@ def initialize(path: Path):
         db.execute("CREATE TABLE IF NOT EXISTS regression_runs (id TEXT PRIMARY KEY, case_id TEXT NOT NULL, run_json TEXT NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS source_records (id TEXT PRIMARY KEY, source TEXT NOT NULL, query_key TEXT NOT NULL, retrieved_at TEXT NOT NULL, record_json TEXT NOT NULL)")
         db.execute("CREATE INDEX IF NOT EXISTS source_records_lookup ON source_records(source, query_key, retrieved_at)")
+        db.execute("CREATE TABLE IF NOT EXISTS reference_checks (id TEXT PRIMARY KEY, source_record_id TEXT NOT NULL, checked_at TEXT NOT NULL, check_json TEXT NOT NULL)")
+        db.execute("CREATE INDEX IF NOT EXISTS reference_checks_lookup ON reference_checks(source_record_id, checked_at)")
+
+
+def save_reference_check(path: Path, check: ReferenceCheck):
+    initialize(path)
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO reference_checks VALUES (?, ?, ?, ?)",
+                   (check.id, check.source_record_id, check.checked_at, check.model_dump_json()))
+
+
+def latest_reference_check(path: Path, source_record_id: str) -> ReferenceCheck | None:
+    initialize(path)
+    with sqlite3.connect(path) as db:
+        row = db.execute("SELECT check_json FROM reference_checks WHERE source_record_id = ? ORDER BY checked_at DESC LIMIT 1",
+                         (source_record_id,)).fetchone()
+    return ReferenceCheck.model_validate_json(row[0]) if row else None
+
+
+def load_reference_check(path: Path, id_: str) -> ReferenceCheck | None:
+    initialize(path)
+    with sqlite3.connect(path) as db:
+        row = db.execute("SELECT check_json FROM reference_checks WHERE id = ?", (id_,)).fetchone()
+    return ReferenceCheck.model_validate_json(row[0]) if row else None
 
 
 def _query_key(query: SourceQuery) -> str:

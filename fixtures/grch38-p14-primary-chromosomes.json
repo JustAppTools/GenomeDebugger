@@ -1,0 +1,185 @@
+{
+  "assembly_name": "GRCh38.p14",
+  "genbank_assembly_accession": "GCA_000001405.29",
+  "refseq_assembly_accession": "GCF_000001405.40",
+  "assembly_report_uri": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/GCF_000001405.40_GRCh38.p14_assembly_report.txt",
+  "assembly_report_sha256": "64318ddff470b69b261a667d813210044f60d4ce654253a547db80ff73638d38",
+  "retrieved_at": "2026-10-14T00:09:27.372808+00:00",
+  "chromosomes": {
+    "1": {
+      "refseq_accession": "NC_000001.11",
+      "genbank_accession": "CM000663.2",
+      "length": 248956422,
+      "ucsc_name": "chr1",
+      "genbank_refseq_relationship": "="
+    },
+    "2": {
+      "refseq_accession": "NC_000002.12",
+      "genbank_accession": "CM000664.2",
+      "length": 242193529,
+      "ucsc_name": "chr2",
+      "genbank_refseq_relationship": "="
+    },
+    "3": {
+      "refseq_accession": "NC_000003.12",
+      "genbank_accession": "CM000665.2",
+      "length": 198295559,
+      "ucsc_name": "chr3",
+      "genbank_refseq_relationship": "="
+    },
+    "4": {
+      "refseq_accession": "NC_000004.12",
+      "genbank_accession": "CM000666.2",
+      "length": 190214555,
+      "ucsc_name": "chr4",
+      "genbank_refseq_relationship": "="
+    },
+    "5": {
+      "refseq_accession": "NC_000005.10",
+      "genbank_accession": "CM000667.2",
+      "length": 181538259,
+      "ucsc_name": "chr5",
+      "genbank_refseq_relationship": "="
+    },
+    "6": {
+      "refseq_accession": "NC_000006.12",
+      "genbank_accession": "CM000668.2",
+      "length": 170805979,
+      "ucsc_name": "chr6",
+      "genbank_refseq_relationship": "="
+    },
+    "7": {
+      "refseq_accession": "NC_000007.14",
+      "genbank_accession": "CM000669.2",
+      "length": 159345973,
+      "ucsc_name": "chr7",
+      "genbank_refseq_relationship": "="
+    },
+    "8": {
+      "refseq_accession": "NC_000008.11",
+      "genbank_accession": "CM000670.2",
+      "length": 145138636,
+      "ucsc_name": "chr8",
+      "genbank_refseq_relationship": "="
+    },
+    "9": {
+      "refseq_accession": "NC_000009.12",
+      "genbank_accession": "CM000671.2",
+      "length": 138394717,
+      "ucsc_name": "chr9",
+      "genbank_refseq_relationship": "="
+    },
+    "10": {
+      "refseq_accession": "NC_000010.11",
+      "genbank_accession": "CM000672.2",
+      "length": 133797422,
+      "ucsc_name": "chr10",
+      "genbank_refseq_relationship": "="
+    },
+    "11": {
+      "refseq_accession": "NC_000011.10",
+      "genbank_accession": "CM000673.2",
+      "length": 135086622,
+      "ucsc_name": "chr11",
+      "genbank_refseq_relationship": "="
+    },
+    "12": {
+      "refseq_accession": "NC_000012.12",
+      "genbank_accession": "CM000674.2",
+      "length": 133275309,
+      "ucsc_name": "chr12",
+      "genbank_refseq_relationship": "="
+    },
+    "13": {
+      "refseq_accession": "NC_000013.11",
+      "genbank_accession": "CM000675.2",
+      "length": 114364328,
+      "ucsc_name": "chr13",
+      "genbank_refseq_relationship": "="
+    },
+    "14": {
+      "refseq_accession": "NC_000014.9",
+      "genbank_accession": "CM000676.2",
+      "length": 107043718,
+      "ucsc_name": "chr14",
+      "genbank_refseq_relationship": "="
+    },
+    "15": {
+      "refseq_accession": "NC_000015.10",
+      "genbank_accession": "CM000677.2",
+      "length": 101991189,
+      "ucsc_name": "chr15",
+      "genbank_refseq_relationship": "="
+    },
+    "16": {
+      "refseq_accession": "NC_000016.10",
+      "genbank_accession": "CM000678.2",
+      "length": 90338345,
+      "ucsc_name": "chr16",
+      "genbank_refseq_relationship": "="
+    },
+    "17": {
+      "refseq_accession": "NC_000017.11",
+      "genbank_accession": "CM000679.2",
+      "length": 83257441,
+      "ucsc_name": "chr17",
+      "genbank_refseq_relationship": "="
+    },
+    "18": {
+      "refseq_accession": "NC_000018.10",
+      "genbank_accession": "CM000680.2",
+      "length": 80373285,
+      "ucsc_name": "chr18",
+      "genbank_refseq_relationship": "="
+    },
+    "19": {
+      "refseq_accession": "NC_000019.10",
+      "genbank_accession": "CM000681.2",
+      "length": 58617616,
+      "ucsc_name": "chr19",
+      "genbank_refseq_relationship": "="
+    },
+    "20": {
+      "refseq_accession": "NC_000020.11",
+      "genbank_accession": "CM000682.2",
+      "length": 64444167,
+      "ucsc_name": "chr20",
+      "genbank_refseq_relationship": "="
+    },
+    "21": {
+      "refseq_accession": "NC_000021.9",
+      "genbank_accession": "CM000683.2",
+      "length": 46709983,
+      "ucsc_name": "chr21",
+      "genbank_refseq_relationship": "="
+    },
+    "22": {
+      "refseq_accession": "NC_000022.11",
+      "genbank_accession": "CM000684.2",
+      "length": 50818468,
+      "ucsc_name": "chr22",
+      "genbank_refseq_relationship": "="
+    },
+    "X": {
+      "refseq_accession": "NC_000023.11",
+      "genbank_accession": "CM000685.2",
+      "length": 156040895,
+      "ucsc_name": "chrX",
+      "genbank_refseq_relationship": "="
+    },
+    "Y": {
+      "refseq_accession": "NC_000024.10",
+      "genbank_accession": "CM000686.2",
+      "length": 57227415,
+      "ucsc_name": "chrY",
+      "genbank_refseq_relationship": "="
+    },
+    "MT": {
+      "refseq_accession": "NC_012920.1",
+      "genbank_accession": "J01415.2",
+      "length": 16569,
+      "ucsc_name": "chrM",
+      "genbank_refseq_relationship": "="
+    }
+  }
+}

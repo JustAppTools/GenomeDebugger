@@ -2,7 +2,7 @@
 
 ## Current system
 
-The React/TypeScript frontend loads or accepts `InvestigationInput` JSON, sends it to the local FastAPI backend, and displays the returned `InvestigationResult`. The backend separates Pydantic schema validation (`models.py`), deterministic comparison (`engine.py`), immutable regression assertions (`regression.py`), SQLite persistence (`storage.py`), and Markdown reporting (`report.py`). `main.py` exposes the API. An optional, explicitly triggered `ensembl.py` adapter queries the current Ensembl service and stores source records. No comparison logic makes network calls.
+The React/TypeScript frontend loads or accepts `InvestigationInput` JSON, sends it to the local FastAPI backend, and displays the returned `InvestigationResult`. The backend separates Pydantic schema validation (`models.py`), deterministic comparison (`engine.py`), immutable regression assertions (`regression.py`), SQLite persistence (`storage.py`), and Markdown reporting (`report.py`). `main.py` exposes the API. Explicit actions in the Public source panel call `ensembl.py` and `ncbi.py`, each preserving source observations in SQLite. No comparison logic makes network calls.
 
 ```mermaid
 flowchart LR
@@ -15,6 +15,8 @@ flowchart LR
   R --> M[Markdown / JSON export]
   UI -->|Explicit fetch| A[Ensembl adapter]
   A -->|Current public response| DB
+  UI -->|Explicit reference check| N[NCBI adapter]
+  N -->|Pinned accession observation| DB
 ```
 
 ## Data model
@@ -27,6 +29,7 @@ flowchart LR
 - `RegressionCase`: immutable copy of one saved investigation and its expected observations, with case schema version and creation time. It is stored separately from the source investigation, so a later source-record change cannot change the baseline.
 - `RegressionRun`: pinned or candidate mode, actual recomputed result, required checks, evidence-hash checks, changed input paths, and pass/fail status. A candidate must preserve each original submitted variant exactly; changes to tool or source versions are recorded and may still pass if expected outputs hold.
 - `SourceRecord`: immutable local capture of one current VEP response, exact query, one-base Ensembl reference, reported assembly accession/releases, retrieval time, source URLs, response hash, and parsed transcript consequences. A comparison selects two rows from this record and produces ordinary snapshots with matching provenance. It does not add a controlled replay.
+- `ReferenceCheck`: immutable local capture tied to one `SourceRecord`. It records the pinned NCBI assembly-report hash, RefSeq accession, EFetch FASTA, contextual SPDI, HGVS response, source URIs/hashes, and agreement flags. A reference mismatch skips the representation requests. A generated transcript comparison includes the latest check summary in the input and its ID/status in both snapshots' provenance. Agreement does not upgrade a causal finding; disagreement makes cross-source identity unresolved and adds linked evidence.
 
 ## Comparison decisions
 
@@ -39,6 +42,6 @@ flowchart LR
 
 ## Adapter boundary
 
-External data enters only on a `mode: fetch` request. `mode: cache_only` never calls Ensembl. A live fetch checks release and assembly metadata, the one-base reference, and the VEP response, then inserts a separate preserved record. Failure uses a prior cached record only with an explicit warning. A current API response never replaces a historical snapshot. The release number is observed metadata, not proof of an atomic release pin. A future normalized allele service should use a validated sequence repository and standards-aware library, rather than extending the current flank trim to repeats.
+External data enters only on a `mode: fetch` request. `mode: cache_only` never calls Ensembl or NCBI. A live Ensembl fetch checks release and assembly metadata, the one-base reference, and the VEP response, then inserts a separate preserved record. The NCBI adapter requires the report's GRCh38.p14 GenBank assembly accession to match that record, maps its chromosome to a versioned RefSeq accession, and validates one base and two notation responses. Failures use prior cached records only with an explicit warning. A current API response never replaces a historical snapshot. The release number is observed metadata, not proof of an atomic release pin. A future generalized normalized allele service should use a validated sequence repository and standards-aware library, rather than extending the current flank trim to repeats.
 
 SQLite is appropriate for small local investigations. Larger datasets and background jobs may require a queue and a separate data store; those are not part of this release.

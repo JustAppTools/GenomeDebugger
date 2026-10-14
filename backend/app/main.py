@@ -5,15 +5,16 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .engine import compare
 from .ensembl import PUBLIC_EXAMPLE, CompareTranscripts, SourceError, SourceLookup, SourceLookupResult, SourceRecord, comparison_input, fetch_record
-from .models import InvestigationInput, InvestigationResult
+from .models import InvestigationInput, InvestigationResult, ReferenceCheckSummary
+from .ncbi import ReferenceCheck, ReferenceCheckError, ReferenceCheckRequest, ReferenceCheckResult, fetch_reference_check
 from .regression import CreateRegressionCase, RegressionCase, RegressionRun, RegressionRunRequest, create_case, run_case
 from .report import markdown_report
-from .storage import list_items, load, save, save_case, load_case, list_cases, save_run, load_run, list_runs, save_source_record, load_source_record, latest_source_record
+from .storage import list_items, load, save, save_case, load_case, list_cases, save_run, load_run, list_runs, save_source_record, load_source_record, latest_source_record, save_reference_check, latest_reference_check, load_reference_check
 
 BASE = Path(__file__).resolve().parents[2]
 DEMO = BASE / "fixtures" / "transcript-switch.json"
 DB = Path(os.environ.get("GENOMEDEBUGGER_DB", str(BASE / "data" / "investigations.db")))
-app = FastAPI(title="GenomeDebugger", version="0.3.0", description="Local genomic discrepancy investigation with an optional public Ensembl adapter")
+app = FastAPI(title="GenomeDebugger", version="0.4.0", description="Local genomic discrepancy investigation with optional Ensembl and NCBI checks")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
 
@@ -36,7 +37,7 @@ async def limit_input(request: Request, call_next):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "0.3.0"}
+    return {"status": "ok", "version": "0.4.0"}
 
 
 @app.get("/api/sources/ensembl/example")
@@ -69,13 +70,46 @@ def ensembl_record(id_: str):
     return record
 
 
+@app.post("/api/sources/ensembl/records/{id_}/reference-check", response_model=ReferenceCheckResult)
+def check_ensembl_reference(id_: str, payload: ReferenceCheckRequest):
+    record = load_source_record(DB, id_)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Source record not found")
+    cached = latest_reference_check(DB, id_)
+    if payload.mode == "cache_only":
+        if cached is None:
+            raise HTTPException(status_code=404, detail="No local NCBI check is cached for this source record")
+        return ReferenceCheckResult(check=cached, access="cache")
+    try:
+        check = fetch_reference_check(record)
+    except ReferenceCheckError as exc:
+        if cached is not None:
+            return ReferenceCheckResult(check=cached, access="cached_after_error", warning=f"Live NCBI check failed: {exc}. Showing the previous local check.")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    save_reference_check(DB, check)
+    return ReferenceCheckResult(check=check, access="fetched")
+
+
+@app.get("/api/sources/reference-checks/{id_}", response_model=ReferenceCheck)
+def reference_check(id_: str):
+    check = load_reference_check(DB, id_)
+    if check is None:
+        raise HTTPException(status_code=404, detail="Reference check not found")
+    return check
+
+
 @app.post("/api/sources/ensembl/records/{id_}/compare", response_model=InvestigationResult)
 def compare_ensembl_transcripts(id_: str, payload: CompareTranscripts):
     record = load_source_record(DB, id_)
     if record is None:
         raise HTTPException(status_code=404, detail="Source record not found")
     try:
-        investigation_input = comparison_input(record, payload)
+        check = latest_reference_check(DB, id_)
+        summary = ReferenceCheckSummary.model_validate(check.model_dump(include={
+            "id", "source_record_id", "source_response_sha256", "refseq_accession",
+            "expected_reference", "observed_reference", "reference_matches",
+            "spdi_matches", "hgvs_matches", "status"})) if check else None
+        investigation_input = comparison_input(record, payload, summary)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     result = compare(investigation_input)

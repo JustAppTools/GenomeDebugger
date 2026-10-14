@@ -49,6 +49,17 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     raw = payload.model_dump(mode="json")
     evidence = [Evidence(id="identity-inputs", kind="input", description="Assembly, sequence accession, reference context, and submitted alleles", data={"a": a.variant.model_dump(), "b": b.variant.model_dump()})]
     ident = identity(a.variant, b.variant)
+    reference_check = payload.reference_check
+    if reference_check:
+        evidence.append(Evidence(id="reference-check", kind="external_reference_observation",
+                                 description="Submitted NCBI reference and notation check linked to this source record",
+                                 data=reference_check.model_dump()))
+        if reference_check.status == "disagree":
+            ident = ident.model_copy(update={
+                "status": "unresolved",
+                "explanation": "A linked NCBI reference or notation check disagrees with the Ensembl source record; cross-source allele identity remains unresolved.",
+                "evidence_ids": [*ident.evidence_ids, "reference-check"],
+            })
     differences: list[Difference] = []
 
     def add(field, before, after, category="annotation", meaningful=True):
@@ -86,6 +97,10 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         add("clinical.assertion_present", str(bool(ac)), str(bool(bc)), "clinical_context")
 
     findings: list[Finding] = []
+    if reference_check and reference_check.status == "disagree":
+        findings.append(Finding(status="unresolved", cause="independent allele disagreement",
+                                explanation="The pinned NCBI check disagrees with at least one reference or notation observation. The VEP transcript comparison cannot resolve that source disagreement.",
+                                affected_fields=["variant"], evidence_ids=["reference-check", "identity-inputs"]))
     consequence_fields = [d.field for d in differences if d.field in {"consequence", "protein_consequence", "gene_id"}]
     only_transcript_config = (
         a.provenance == b.provenance and ident.status == "verified"
@@ -109,7 +124,7 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         findings.append(Finding(status=status, cause="transcript selection" if status == "possible" else "annotation discrepancy", explanation="Transcript selection differs, but no controlled replay established causation." if status == "possible" else "The supplied snapshots do not establish why the annotation changed.", affected_fields=consequence_fields, evidence_ids=[eid]))
     if any(d.field == "source_release" for d in differences):
         findings.append(Finding(status="possible", cause="source release", explanation="The source release differs. Without preserved source records, the causal data change cannot be reconstructed.", affected_fields=[d.field for d in differences if d.category in ("annotation", "clinical")], evidence_ids=[d.evidence_ids[0] for d in differences if d.field == "source_release"]))
-    if ident.status == "unresolved":
+    if ident.status == "unresolved" and not (reference_check and reference_check.status == "disagree"):
         findings.append(Finding(status="unresolved", cause="variant identity", explanation=ident.explanation, affected_fields=["variant"], evidence_ids=ident.evidence_ids))
     if ac and bc and (ac.framework != bc.framework or ac.condition_id != bc.condition_id):
         findings.append(Finding(status="unresolved", cause="clinical assertion comparability", explanation="Classification values refer to different conditions or frameworks and were not compared directly.", affected_fields=["clinical.classification"], evidence_ids=["clinical-scope"]))

@@ -23,3 +23,7 @@ Save the complete source investigation inside each regression case. Pinned runs 
 ## 2026-10-11: Explicit current Ensembl source adapter
 
 Limit the first public adapter to GRCh38 single nucleotide substitutions. Require an explicit fetch action, verify the one-base reference and returned VEP identity, and preserve each response with source URLs, hash, assembly accession, reported releases, and retrieval time. Cache-only reads never contact Ensembl. A comparison of two returned transcripts remains a possible explanation: the VEP response is a current source observation, not a controlled replay or historical dataset.
+
+## 2026-10-13: Independent NCBI allele check
+
+Pin the GRCh38.p14 primary-chromosome accession mapping from NCBI's assembly report, including its source hash. On explicit user action, retrieve one RefSeq base with EFetch and check the corresponding SNV through NCBI Variation Services' contextual SPDI and HGVS endpoints. Preserve each response separately from the Ensembl source record. A reference disagreement stops notation requests and remains visible. Link a saved check summary and ID in generated comparisons. Agreement never verifies a VEP transcript-selection cause; disagreement downgrades cross-source identity to unresolved.
