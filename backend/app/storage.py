@@ -2,6 +2,7 @@ import sqlite3
 from pathlib import Path
 from .models import InvestigationResult
 from .regression import RegressionCase, RegressionRun
+from .ensembl import SourceQuery, SourceRecord
 
 
 def initialize(path: Path):
@@ -10,6 +11,34 @@ def initialize(path: Path):
         db.execute("CREATE TABLE IF NOT EXISTS investigations (id TEXT PRIMARY KEY, title TEXT NOT NULL, result_json TEXT NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS regression_cases (id TEXT PRIMARY KEY, name TEXT NOT NULL, source_investigation_id TEXT NOT NULL, case_json TEXT NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS regression_runs (id TEXT PRIMARY KEY, case_id TEXT NOT NULL, run_json TEXT NOT NULL)")
+        db.execute("CREATE TABLE IF NOT EXISTS source_records (id TEXT PRIMARY KEY, source TEXT NOT NULL, query_key TEXT NOT NULL, retrieved_at TEXT NOT NULL, record_json TEXT NOT NULL)")
+        db.execute("CREATE INDEX IF NOT EXISTS source_records_lookup ON source_records(source, query_key, retrieved_at)")
+
+
+def _query_key(query: SourceQuery) -> str:
+    return query.model_dump_json()
+
+
+def save_source_record(path: Path, record: SourceRecord):
+    initialize(path)
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT OR IGNORE INTO source_records VALUES (?, ?, ?, ?, ?)",
+                   (record.id, "ensembl_vep", _query_key(record.query), record.retrieved_at, record.model_dump_json()))
+
+
+def load_source_record(path: Path, id_: str) -> SourceRecord | None:
+    initialize(path)
+    with sqlite3.connect(path) as db:
+        row = db.execute("SELECT record_json FROM source_records WHERE id = ?", (id_,)).fetchone()
+    return SourceRecord.model_validate_json(row[0]) if row else None
+
+
+def latest_source_record(path: Path, query: SourceQuery) -> SourceRecord | None:
+    initialize(path)
+    with sqlite3.connect(path) as db:
+        row = db.execute("SELECT record_json FROM source_records WHERE source = ? AND query_key = ? ORDER BY retrieved_at DESC LIMIT 1",
+                         ("ensembl_vep", _query_key(query))).fetchone()
+    return SourceRecord.model_validate_json(row[0]) if row else None
 
 
 def save(path: Path, result: InvestigationResult):

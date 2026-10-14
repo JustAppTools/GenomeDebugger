@@ -19,3 +19,7 @@ Finding statuses express what was tested. No numeric confidence score is emitted
 ## 2026-10-11: Immutable regression baselines
 
 Save the complete source investigation inside each regression case. Pinned runs require evidence hashes to match; candidate runs require expected outputs and findings but show evidence drift separately. This permits a new pipeline version to pass when its output remains stable without hiding changes in supporting inputs. Candidate variants must exactly match the saved representations until a validated equivalence service exists.
+
+## 2026-10-11: Explicit current Ensembl source adapter
+
+Limit the first public adapter to GRCh38 single nucleotide substitutions. Require an explicit fetch action, verify the one-base reference and returned VEP identity, and preserve each response with source URLs, hash, assembly accession, reported releases, and retrieval time. Cache-only reads never contact Ensembl. A comparison of two returned transcripts remains a possible explanation: the VEP response is a current source observation, not a controlled replay or historical dataset.

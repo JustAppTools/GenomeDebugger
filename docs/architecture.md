@@ -2,7 +2,7 @@
 
 ## Current system
 
-The React/TypeScript frontend loads or accepts `InvestigationInput` JSON, sends it to the local FastAPI backend, and displays the returned `InvestigationResult`. The backend separates Pydantic schema validation (`models.py`), deterministic comparison (`engine.py`), immutable regression assertions (`regression.py`), SQLite persistence (`storage.py`), and Markdown reporting (`report.py`). `main.py` exposes the API. No comparison logic makes network calls.
+The React/TypeScript frontend loads or accepts `InvestigationInput` JSON, sends it to the local FastAPI backend, and displays the returned `InvestigationResult`. The backend separates Pydantic schema validation (`models.py`), deterministic comparison (`engine.py`), immutable regression assertions (`regression.py`), SQLite persistence (`storage.py`), and Markdown reporting (`report.py`). `main.py` exposes the API. An optional, explicitly triggered `ensembl.py` adapter queries the current Ensembl service and stores source records. No comparison logic makes network calls.
 
 ```mermaid
 flowchart LR
@@ -13,6 +13,8 @@ flowchart LR
   E --> R[Evidence-linked result]
   R --> UI
   R --> M[Markdown / JSON export]
+  UI -->|Explicit fetch| A[Ensembl adapter]
+  A -->|Current public response| DB
 ```
 
 ## Data model
@@ -24,6 +26,7 @@ flowchart LR
 - `InvestigationResult`: canonical-input SHA-256, variant identity result, field differences, findings, and individually addressable evidence objects. Findings contain evidence IDs and a qualitative status (`verified`, `probable`, `possible`, `unresolved`). The current engine does not emit `probable` because it has no calibrated supporting rule for that category.
 - `RegressionCase`: immutable copy of one saved investigation and its expected observations, with case schema version and creation time. It is stored separately from the source investigation, so a later source-record change cannot change the baseline.
 - `RegressionRun`: pinned or candidate mode, actual recomputed result, required checks, evidence-hash checks, changed input paths, and pass/fail status. A candidate must preserve each original submitted variant exactly; changes to tool or source versions are recorded and may still pass if expected outputs hold.
+- `SourceRecord`: immutable local capture of one current VEP response, exact query, one-base Ensembl reference, reported assembly accession/releases, retrieval time, source URLs, response hash, and parsed transcript consequences. A comparison selects two rows from this record and produces ordinary snapshots with matching provenance. It does not add a controlled replay.
 
 ## Comparison decisions
 
@@ -34,8 +37,8 @@ flowchart LR
 5. For transcript-related output changes, replay the synthetic table only when the allele, tool, version, source release, and configuration are held constant. A matching replay earns `verified` within the fixture. Otherwise report a possible or unresolved cause.
 6. Store the full result locally, including supporting evidence, and export it.
 
-## Planned adapters
+## Adapter boundary
 
-External data will enter through source adapters that return immutable, versioned records with source URI, accession, release, retrieval time, and content hash. Such adapters must never replace a historical snapshot with a current API response. A future normalized allele service should use a validated sequence repository and standards-aware library, rather than extending the current flank trim to repeats.
+External data enters only on a `mode: fetch` request. `mode: cache_only` never calls Ensembl. A live fetch checks release and assembly metadata, the one-base reference, and the VEP response, then inserts a separate preserved record. Failure uses a prior cached record only with an explicit warning. A current API response never replaces a historical snapshot. The release number is observed metadata, not proof of an atomic release pin. A future normalized allele service should use a validated sequence repository and standards-aware library, rather than extending the current flank trim to repeats.
 
 SQLite is appropriate for small local investigations. Larger datasets and background jobs may require a queue and a separate data store; those are not part of this release.
