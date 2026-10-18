@@ -142,3 +142,66 @@ test('historical output import compares two preserved artifacts and bundles both
   expect(bundle.entries.source_records).toHaveLength(2)
   expect((await page.request.post('/api/bundles/verify',{data:bundle})).ok()).toBe(true)
 })
+
+test('editing during a comparison keeps the newer draft visibly stale',async({page})=>{
+  await page.goto('/')
+  await page.getByRole('button',{name:'Load synthetic demo',exact:true}).first().click()
+  await page.getByRole('heading',{name:'Compared analyses'}).waitFor()
+  await page.getByRole('button',{name:'Snapshot input',exact:true}).click()
+  const submitted=JSON.parse(await page.getByLabel('Investigation JSON').inputValue())
+  submitted.title='Submitted draft revision'
+  await page.getByLabel('Investigation JSON').fill(JSON.stringify(submitted))
+  let release:(()=>void)|undefined
+  await page.route('**/api/investigations',async route=>{
+    if(route.request().method()!=='POST'){await route.continue();return}
+    const response=await route.fetch()
+    await new Promise<void>(resolve=>{release=resolve})
+    await route.fulfill({response})
+  })
+  await page.getByRole('button',{name:'Compare',exact:true}).click()
+  await expect.poll(()=>Boolean(release)).toBe(true)
+  const edited={...submitted,title:'Edited while waiting'}
+  await page.getByLabel('Investigation JSON').fill(JSON.stringify(edited))
+  release!()
+  await page.getByRole('heading',{name:'Compared analyses'}).waitFor()
+  await expect(page.getByRole('status')).toContainText('snapshot JSON has changed')
+  await page.getByRole('button',{name:'Snapshot input',exact:true}).click()
+  expect(JSON.parse(await page.getByLabel('Investigation JSON').inputValue()).title).toBe(edited.title)
+})
+
+test('changed public query invalidates the pending response',async({page})=>{
+  const fixture=JSON.parse(await readFile('../fixtures/snpeff-mane-public-run.json','utf8'))
+  let release:(()=>void)|undefined
+  let count=0
+  await page.route('**/api/sources/ensembl/lookup',async route=>{
+    const query=route.request().postDataJSON().query
+    const found={...fixture.source,id:`request-${++count}`,query}
+    if(count===1)await new Promise<void>(resolve=>{release=resolve})
+    await route.fulfill({json:{record:found,access:'cache'}})
+  })
+  await page.goto('/')
+  await page.getByRole('button',{name:'Public source',exact:true}).click()
+  await page.getByRole('button',{name:'Load cached',exact:true}).click()
+  await expect.poll(()=>Boolean(release)).toBe(true)
+  await page.getByLabel('Position',{exact:true}).fill('999999')
+  release!()
+  await expect(page.getByRole('button',{name:'Load cached',exact:true})).toBeEnabled()
+  await expect(page.getByRole('heading',{name:'1:6524705 C→T',exact:true})).toHaveCount(0)
+  await expect(page.getByRole('button',{name:'Compare',exact:true})).toHaveCount(0)
+  await page.getByRole('button',{name:'Load cached',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'1:999999 C→T',exact:true})).toBeVisible()
+})
+
+test('valid omitted defaults work in both JSON and guided modes',async({page})=>{
+  const input=await (await page.request.get('/api/demos/transcript-switch')).json()
+  delete input.synthetic;delete input.controlled_lookup
+  input.title='Defaulted non-synthetic input'
+  await page.goto('/')
+  await page.getByRole('button',{name:'Snapshot input',exact:true}).click()
+  await page.getByRole('button',{name:'JSON editor',exact:true}).click()
+  await page.getByLabel('Investigation JSON').fill(JSON.stringify(input))
+  await page.getByRole('button',{name:'Guided form',exact:true}).click()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await page.getByRole('button',{name:'Compare analyses',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
+})

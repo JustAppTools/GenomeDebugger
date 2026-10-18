@@ -174,8 +174,10 @@ class InvestigationInput(StrictModel):
             raise ValueError("snapshot IDs must differ")
         if self.controlled_lookup and not self.synthetic:
             raise ValueError("synthetic lookup requires synthetic=true")
-        if any(not key or len(key) > 200 for key in self.meaningful_overrides):
-            raise ValueError("meaningful override field names must be 1–200 characters")
+        # Field paths escape identifiers and can be longer than their source
+        # fields. The HTTP input budget and override count bound total size.
+        if any(not key for key in self.meaningful_overrides):
+            raise ValueError("meaningful override field names must not be empty")
         if self.reference_check:
             check = self.reference_check
             for snapshot in self.snapshots:

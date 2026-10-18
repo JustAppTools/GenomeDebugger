@@ -19,7 +19,7 @@ from .historical import HistoricalImport, SourcePair, import_historical, compari
 from .bundle import ENGINE_VERSION, create_bundle, verify_bundle
 from .storage import list_items, load, save, save_case, load_case, list_cases, save_run, load_run, list_runs, save_source_record, load_source_record, latest_source_record, save_reference_check, latest_reference_check, load_reference_check, delete_investigation, initialize, StorageLimitError, RecordConflictError, save_snpeff_check, latest_snpeff_check
 from .storage import save_allele_check, latest_allele_check
-from .storage import list_source_records
+from .storage import list_source_records, save_bundle_records
 
 BASE = Path(__file__).resolve().parents[2]
 DEMO = BASE / "fixtures" / "transcript-switch.json"
@@ -88,10 +88,10 @@ def snpeff_runtime():
 
 
 @app.get("/api/sources/records")
-def preserved_sources():
+def preserved_sources(limit: int = Query(default=200, ge=1, le=500), offset: int = Query(default=0, ge=0)):
     return [{**record.model_dump(exclude={"source_response","artifact"}),
              "artifact":{key:value for key,value in record.artifact.items() if key!="text"} if record.artifact else None}
-            for record in list_source_records(DB)]
+            for record in list_source_records(DB, limit, offset)]
 
 
 @app.post("/api/sources/historical-vep",response_model=SourceRecord)
@@ -303,7 +303,7 @@ def investigation_bundle(id_: str):
 def bundle_verify(payload: dict):
     try:
         result, source, check, snpeff, allele_check = verify_bundle(payload)
-    except (ValueError, KeyError) as exc:
+    except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"valid": True, "investigation_id": result.id, "has_source_record": bool(source), "has_reference_check": check is not None, "has_snpeff_check": snpeff is not None, "has_allele_check":allele_check is not None}
 
@@ -312,20 +312,9 @@ def bundle_verify(payload: dict):
 def bundle_import(payload: dict):
     try:
         result, source, check, snpeff, allele_check = verify_bundle(payload)
-    except (ValueError, KeyError) as exc:
+    except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    existing = load(DB, result.id)
-    if existing is not None and existing != result:
-        raise HTTPException(status_code=409, detail="An investigation with this input ID already has a different saved result")
-    for record in source:
-        save_source_record(DB, record)
-    if check:
-        save_reference_check(DB, check)
-    if snpeff:
-        save_snpeff_check(DB, snpeff)
-    save(DB, result)
-    if allele_check:
-        save_allele_check(DB, allele_check)
+    save_bundle_records(DB, result, source, check, snpeff, allele_check)
     return {"imported": result.id}
 
 
@@ -348,8 +337,9 @@ def create_regression_case(id_: str, payload: CreateRegressionCase):
 
 
 @app.get("/api/regression-cases")
-def regression_cases():
-    return list_cases(DB)
+def regression_cases(source_investigation_id: str | None = Query(default=None, max_length=100),
+                     limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0)):
+    return list_cases(DB, source_investigation_id, limit, offset)
 
 
 @app.get("/api/regression-cases/{id_}", response_model=RegressionCase)
@@ -374,10 +364,10 @@ def run_regression_case(id_: str, payload: RegressionRunRequest):
 
 
 @app.get("/api/regression-cases/{id_}/runs")
-def regression_runs(id_: str):
+def regression_runs(id_: str, limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0)):
     if load_case(DB, id_) is None:
         raise HTTPException(status_code=404, detail="Regression case not found")
-    return list_runs(DB, id_)
+    return list_runs(DB, id_, limit, offset)
 
 
 @app.get("/api/regression-runs/{id_}", response_model=RegressionRun)

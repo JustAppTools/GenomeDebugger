@@ -11,12 +11,15 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sys
 import zipfile
 
 import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOL_ROOT = ROOT / "tools" / "snpeff"
+sys.path.insert(0, str(ROOT / "backend"))
+from app.snpeff_databases import SUPPORTED_DATABASES
 
 
 def sha(path):
@@ -50,12 +53,26 @@ def extract(archive, destination):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument("--genome",default="GRCh38.mane.1.0.ensembl")
+    parser.add_argument("--genome",default="GRCh38.mane.1.0.ensembl", choices=sorted(SUPPORTED_DATABASES))
     args=parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}",args.genome):
         raise ValueError("Invalid SnpEff database name")
     TOOL_ROOT.mkdir(parents=True,exist_ok=True)
     if (TOOL_ROOT/"runtime.json").exists():
+        manifest_path=TOOL_ROOT/"runtime.json"
+        manifest=json.loads(manifest_path.read_text(encoding='utf-8'))
+        if manifest.get('genome') not in SUPPORTED_DATABASES:
+            raise ValueError('Existing runtime uses an unsupported database/build')
+        expected=SUPPORTED_DATABASES[manifest['genome']]
+        if all(key not in manifest for key in expected):
+            # Upgrade the known 0.6.0 installation after confirming its pinned
+            # files are intact; no binaries or database files are replaced.
+            from app.snpeff_runner import _verify_artifacts
+            _verify_artifacts(manifest)
+            manifest.update(expected)
+            manifest_path.write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+        from app.snpeff_databases import validate_database
+        validate_database(manifest)
         print("A pinned runtime already exists. Inspect tools/snpeff/runtime.json before changing it.")
         return
     with httpx.Client(follow_redirects=True,timeout=30) as client:
@@ -90,6 +107,7 @@ def main():
     manifest={"installed_at":datetime.now(timezone.utc).isoformat(),"java":str(java),"java_sha256":sha(java),
         "jar":str(jar),"jar_sha256":sha(jar),"config":str(config),"config_sha256":sha(config),
         "data_dir":str(data),"genome":args.genome,"database_files":files,
+        **SUPPORTED_DATABASES[args.genome],
         "snpeff_version":(version.stdout+version.stderr).strip(),
         "sources":{"java":package["link"],"java_publisher_sha256":package["checksum"],
                    "snpeff":snpeff_url,"snpeff_archive_sha256":sha(tool_zip),

@@ -128,6 +128,7 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         if left.clinical and right.clinical:
             add(f"annotations[{label}].clinical.classification", left.clinical.classification, right.clinical.classification, "clinical")
             add(f"annotations[{label}].clinical.review_status", left.clinical.review_status, right.clinical.review_status, "clinical")
+            add(f"annotations[{label}].clinical.assertion_date", left.clinical.assertion_date, right.clinical.assertion_date, "clinical_metadata", False)
     extra_identity_issues: list[str] = []
     variant_rows_a = {variant_key(row.variant): row for row in a.variant_records}
     variant_rows_b = {variant_key(row.variant): row for row in b.variant_records}
@@ -159,6 +160,7 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
             if before.clinical and after.clinical:
                 add(f"{label}.annotations[{annotation_label}].clinical.classification", before.clinical.classification, after.clinical.classification, "clinical")
                 add(f"{label}.annotations[{annotation_label}].clinical.review_status", before.clinical.review_status, after.clinical.review_status, "clinical")
+                add(f"{label}.annotations[{annotation_label}].clinical.assertion_date", before.clinical.assertion_date, after.clinical.assertion_date, "clinical_metadata", False)
     add("tool", a.provenance.tool, b.provenance.tool, "provenance")
     add("tool_version", a.provenance.tool_version, b.provenance.tool_version, "provenance")
     add("source_name", a.provenance.source_name, b.provenance.source_name, "provenance")
@@ -172,6 +174,7 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         if ac.framework == bc.framework and ac.condition_id == bc.condition_id:
             add("clinical.classification", ac.classification, bc.classification, "clinical")
             add("clinical.review_status", ac.review_status, bc.review_status, "clinical")
+            add("clinical.assertion_date", ac.assertion_date, bc.assertion_date, "clinical_metadata", False)
         else:
             evidence.append(Evidence(id="clinical-scope", kind="comparability", description="Clinical assertions refer to different frameworks or conditions", data={"a": ac.model_dump(), "b": bc.model_dump()}))
     elif ac or bc:

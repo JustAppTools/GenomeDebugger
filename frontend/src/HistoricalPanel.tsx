@@ -17,6 +17,7 @@ export default function HistoricalPanel({onCompare}:{onCompare:(value:Result)=>v
   const [assembly,setAssembly]=useState('GCA_000001405.29')
   const [uri,setUri]=useState('')
   const [records,setRecords]=useState<Source[]>([])
+  const [hasMore,setHasMore]=useState(false)
   const [ids,setIds]=useState(['',''])
   const [transcripts,setTranscripts]=useState(['',''])
   const [busy,setBusy]=useState(false)
@@ -30,18 +31,20 @@ export default function HistoricalPanel({onCompare}:{onCompare:(value:Result)=>v
       setRaw(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(await file.arrayBuffer()))
     } catch {setError('Historical VEP output must be valid UTF-8 text')}
   }
-  async function list() {
-    const response=await fetch('/api/sources/records')
+  async function list(more=false) {
+    const response=await fetch(more?`/api/sources/records?offset=${records.length}&limit=200`:'/api/sources/records')
     if(!response.ok)throw new Error('Preserved sources are unavailable')
     const found=await response.json() as Source[]
-    setRecords(found)
+    setHasMore(found.length===200)
+    setRecords(more?[...records,...found]:found)
+    if(more)return
     const selected=[found[0],found[1]??found[0]]
     setIds(selected.map(item=>item?.id??''));setTranscripts(selected.map(item=>item?.transcripts[0]?.transcript_id??''))
   }
-  async function run(action:'list'|'import'|'compare') {
+  async function run(action:'list'|'more'|'import'|'compare') {
     setBusy(true);setError('');setNotice('')
     try {
-      if(action==='list'){await list();return}
+      if(action==='list'||action==='more'){await list(action==='more');return}
       const url=action==='import'?'/api/sources/historical-vep':'/api/sources/compare'
       const payload=action==='import'?{query:{...query,position:Number(query.position)},raw_json:raw,
         source_release:Number(release),tool_version:version,generated_at:new Date(date).toISOString(),
@@ -65,6 +68,7 @@ export default function HistoricalPanel({onCompare}:{onCompare:(value:Result)=>v
       <button className="button secondary" disabled={busy||!raw||!release||!version||!date||!uri} onClick={()=>run('import')}>Preserve historical output</button>
     </details>
     <div className="source-actions"><button className="button secondary" disabled={busy} onClick={()=>run('list')}>Load preserved sources</button></div>
+    {hasMore&&<button className="button secondary" disabled={busy} onClick={()=>run('more')}>Load older sources</button>}
     {records.length>0&&<><div className="guide-grid">{ids.map((id,index)=>{
       const selected=records.find(item=>item.id===id)
       return <div key={index}><h3>Analysis {index?'B':'A'}</h3><label className="guide-field">Source record<select aria-label={`Preserved analysis ${index+1} source`} value={id} onChange={e=>{const next=[...ids];next[index]=e.target.value;setIds(next);const rows=[...transcripts];rows[index]=records.find(item=>item.id===e.target.value)?.transcripts[0]?.transcript_id??'';setTranscripts(rows)}}>{records.map(item=><option value={item.id} key={item.id}>{item.origin==='historical_artifact'?'Historical artifact':'Current API capture'} · release {item.releases.join(',')} · {item.query.chromosome}:{item.query.position} · {item.id}</option>)}</select></label>

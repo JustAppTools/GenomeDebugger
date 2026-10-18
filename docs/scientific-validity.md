@@ -1,4 +1,4 @@
-# Scientific validity and limitations — 0.6.0
+# Scientific validity and limitations — 0.6.1
 
 ## Verified behavior
 
@@ -28,3 +28,9 @@ Unit, API, and browser tests cover malformed input, disagreement, offline behavi
 - There is no ClinVar adapter, authenticated release timeline, patient-specific interpretation, pathogenicity prediction, or clinical review-status inference. More independently sourced cases and performance validation are needed before broader deployment.
 
 GenomeDebugger is a research and bioinformatics quality-assurance tool, not a certified clinical diagnostic device.
+
+## 0.6.1 corrections
+
+Clinical assertion dates are compared for primary and additional annotations as nonmeaningful metadata by default. Source-generated VEP annotations and declared full transcript sets are checked against captured response rows during portable verification. Custom transformations require distinct tool provenance. Local SnpEff database assembly is checked before execution, and its recorded input hash now covers actual on-disk bytes on Windows. The captured local-run fixture was refreshed with corrected byte handling and assembly metadata; exact transcript-version mismatches remain unresolved.
+
+Archived 0.5.0 and 0.6.0 comparison results use frozen rules for replay verification. New comparisons use separately versioned 0.6.1 IDs and retain old saved records. Corruption/contradiction checks still do not establish external authenticity or clinical validity.

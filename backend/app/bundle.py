@@ -7,20 +7,57 @@ do not authenticate user-supplied source data.
 from datetime import datetime, timezone
 import hashlib
 import json
+from typing import Any
+from .models import StrictModel
 
 from .engine import canonical_json, compare, digest
 from .legacy_engine_v050 import compare as compare_v050
+from .legacy_engine_v060 import compare as compare_v060
 from .limits import MAX_BUNDLE_BYTES
 from .version import ENGINE_VERSION
 from .allele_check import AlleleCheck, replay_allele_check
 from .historical import HistoricalImport, import_historical
 from .models import InvestigationResult
-from .ensembl import SourceRecord, TranscriptConsequence
+from .ensembl import SourceRecord, TranscriptConsequence, snapshot_from_record
 from .ncbi import ReferenceCheck, ReferenceCheckError, replay_reference_check
 from .snpeff import SnpEffCheck, SnpEffCheckRequest, compare_snpeff
+from .snpeff_databases import validate_database
 from .storage import load_reference_check, load_source_record, load_snpeff_check, latest_allele_check
 
 BUNDLE_VERSION = 2
+
+
+class BundleManifest(StrictModel):
+    format: str
+    version: int
+    engine_version: str
+    entries: dict[str, Any]
+    sha256: dict[str, str]
+    exported_at: str | None = None
+    replayed_from_id: str | None = None
+
+
+def _verify_source_snapshot(source, snapshot):
+    # Custom tools may cite the response as an input. A VEP-generated snapshot
+    # claims that its outputs were derived directly from this captured response.
+    if snapshot.provenance.tool not in {"Ensembl VEP REST", "Ensembl VEP historical output"}:
+        return
+    expected = snapshot_from_record(source, snapshot.annotation.transcript_id, "verify")
+    if snapshot.variant != expected.variant or snapshot.annotation != expected.annotation or snapshot.variant_records:
+        raise ValueError("VEP snapshot does not match its preserved source variant and annotation")
+    expected_rows = {row.transcript_id: row for row in expected.annotations}
+    if any(expected_rows.get(row.transcript_id) != row for row in snapshot.annotations):
+        raise ValueError("VEP snapshot annotation rows contradict the preserved source")
+    if (snapshot.provenance.configuration.get("source_annotation_scope") == "all_transcripts" and
+            {row.transcript_id for row in snapshot.annotations} != set(expected_rows)):
+        raise ValueError("VEP snapshot is missing rows from its declared complete source annotation set")
+    for key in ("tool", "tool_version", "source_name", "source_release", "source_uri"):
+        actual = getattr(snapshot.provenance, key)
+        legacy_release = (key == "source_release" and source.origin == "current_api" and
+            "source_annotation_scope" not in snapshot.provenance.configuration and
+            actual == "Ensembl " + ",".join(str(value) for value in source.releases))
+        if actual != getattr(expected.provenance, key) and not legacy_release:
+            raise ValueError("VEP snapshot provenance contradicts its preserved source")
 
 
 def _verify_source(source: SourceRecord) -> None:
@@ -78,10 +115,16 @@ def _verify_snpeff(source: SourceRecord, check: SnpEffCheck) -> None:
         snpeff_version=check.snpeff_version, genome_database=check.genome_database,
         database_sha256=check.database_sha256))
     if (check.id != expected_id or check.status != replay.status or check.matches != replay.matches or
-            check.unmatched_ensembl != replay.unmatched_ensembl or check.unmatched_snpeff != replay.unmatched_snpeff):
+            check.unmatched_ensembl != replay.unmatched_ensembl or check.unmatched_snpeff != replay.unmatched_snpeff or
+            check.explanation != replay.explanation):
         raise ValueError("Bundle SnpEff check does not match a comparison replay")
     if check.execution:
         run = check.execution
+        if run.assembly_name is not None or run.assembly_accession is not None:
+            expected = validate_database({"genome":check.genome_database,
+                "assembly_name":run.assembly_name,"assembly_accession":run.assembly_accession})
+            if source.assembly_accession != expected["assembly_accession"]:
+                raise ValueError("SnpEff execution assembly does not match its source")
         q = source.query
         expected_vcf = ("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
                         f"{q.chromosome}\t{q.position}\t.\t{q.ref}\t{q.alt}\t.\tPASS\t.\n")
@@ -131,12 +174,14 @@ def create_bundle(db_path, result: InvestigationResult) -> dict:
             "entries": entries, "sha256": {key: digest(value) for key, value in entries.items()}}
     if len(canonical_json(bundle).encode("utf-8")) > MAX_BUNDLE_BYTES:
         raise ValueError("Bundle exceeds the 32 MB portability limit; split the investigation before exporting")
+    verify_bundle(bundle)
     return bundle
 
 
 def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord], ReferenceCheck | None, SnpEffCheck | None, AlleleCheck | None]:
+    BundleManifest.model_validate(bundle, strict=True)
     if (bundle.get("format") != "GenomeDebugger bundle" or bundle.get("version") != BUNDLE_VERSION or
-            bundle.get("engine_version") not in {"0.5.0", ENGINE_VERSION}):
+            bundle.get("engine_version") not in {"0.5.0", "0.6.0", ENGINE_VERSION}):
         raise ValueError("Unsupported bundle format or version")
     entries, hashes = bundle.get("entries"), bundle.get("sha256")
     allowed = {"investigation", "source_record", "source_records", "reference_check", "snpeff_check", "allele_check"}
@@ -147,7 +192,7 @@ def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord]
         if digest(value) != hashes[name]:
             raise ValueError(f"Bundle entry {name} failed its SHA-256 check")
     result = InvestigationResult.model_validate(entries["investigation"])
-    rules = compare_v050 if bundle["engine_version"] == "0.5.0" else compare
+    rules = {"0.5.0": compare_v050, "0.6.0": compare_v060, ENGINE_VERSION: compare}[bundle["engine_version"]]
     if result.engine_version != bundle["engine_version"] or result != rules(result.input):
         raise ValueError("Investigation result does not match a replay of its declared engine version")
     if "source_record" in entries and "source_records" in entries:
@@ -182,6 +227,10 @@ def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord]
     if any(s.provenance.input_sha256 != source_map[s.provenance.configuration["source_record_id"]].source_response_sha256
            for s in result.input.snapshots if s.provenance.configuration.get("source_record_id")):
         raise ValueError("Bundle source response hash does not match investigation provenance")
+    for snapshot in result.input.snapshots:
+        source_id = snapshot.provenance.configuration.get("source_record_id")
+        if source_id:
+            _verify_source_snapshot(source_map[source_id], snapshot)
     if check and (check.source_record_id not in source_map or
                   not result.input.reference_check or check.id != result.input.reference_check.id):
         raise ValueError("Bundle reference check does not match its source or investigation")

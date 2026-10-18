@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, ArrowRight, Braces, Check, ChevronDown, ClipboardCheck, ClipboardList, Database, Dna, FileJson, FileText, FlaskConical, GitCompareArrows, Globe2, Info, Layers3, LibraryBig, Search, ShieldCheck, SlidersHorizontal, Sparkles, Workflow } from 'lucide-react'
 import type { Difference, Evidence, InvestigationInput, Result, Snapshot } from './types'
 import RegressionPanel from './RegressionPanel'
 import PublicSourcePanel from './PublicSourcePanel'
-import GuidedInput, { blankInput, isGuidedInput, validateGuidedInput } from './GuidedInput'
+import GuidedInput, { blankInput, isGuidedInput, normalizeGuidedInput, validateGuidedInput } from './GuidedInput'
 import InvestigationLibrary from './InvestigationLibrary'
 import AlleleCheckPanel from './AlleleCheckPanel'
 import { MAX_BUNDLE_BYTES, MAX_INPUT_BYTES } from './limits'
@@ -65,7 +65,9 @@ function EvidencePanel({ evidence, selected, onSelect }: {evidence: Evidence[]; 
 }
 
 export default function App() {
-  const [inputText, setInputText] = useState('')
+  const [inputText, setInputTextState] = useState('')
+  const draft = useRef('')
+  function setInputText(value:string) {draft.current=value;setInputTextState(value)}
   const [inputDirty, setInputDirty] = useState(false)
   const [inputMode,setInputMode] = useState<'guided'|'json'>('guided')
   const [engineState,setEngineState] = useState<'checking'|'online'|'offline'>('checking')
@@ -77,7 +79,7 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null)
   const [recent, setRecent] = useState<{id:string;title:string;created_at?:string|null}[]>([])
-  const parsed = useMemo(() => { try { return JSON.parse(inputText) as InvestigationInput } catch { return null } }, [inputText])
+  const parsed = useMemo(() => { try { return normalizeGuidedInput(JSON.parse(inputText)) as InvestigationInput } catch { return null } }, [inputText])
   const guidedInvalid = inputMode === 'guided' && validateGuidedInput(parsed).length > 0
   const inputChanged = result !== null && inputDirty
 
@@ -130,26 +132,28 @@ export default function App() {
       const response = await fetch(`${API}/demos/transcript-switch`)
       if (!response.ok) throw new Error(`Demo unavailable (${response.status})`)
       const body = await response.json() as InvestigationInput
-      setInputText(JSON.stringify(body,null,2))
+      const submittedText = JSON.stringify(body,null,2)
+      setInputText(submittedText)
       setResult(null); setInputDirty(false); setInputMode('json'); setTab('input')
       const comparison = await fetch(`${API}/investigations`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
       if (!comparison.ok) throw new Error(`Demo comparison failed (${comparison.status})`)
-      showResult(await comparison.json() as Result)
+      showResult(await comparison.json() as Result, submittedText)
     }
     catch (e) { setError(e instanceof Error ? e.message : 'Unable to load demo') }
     finally { setBusy(false) }
   }
-  function showResult(next: Result) {
-    setResult(next); setInputDirty(false); setTab('overview'); setSelectedEvidence(null); setNotice('')
+  function showResult(next: Result, submittedText?:string) {
+    setResult(next); setInputDirty(submittedText !== undefined && draft.current !== submittedText); setTab('overview'); setSelectedEvidence(null); setNotice('')
     setRecent(previous => [{id:next.id,title:next.input.title},...previous.filter(item=>item.id!==next.id)].slice(0,100))
   }
   async function run() {
     setBusy(true); setError('')
     try {
       if (!parsed) throw new Error('Input is not valid JSON.')
+      const submittedText = inputText
       const response = await fetch(`${API}/investigations`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(parsed)})
       if (!response.ok) { const detail = await response.json(); throw new Error(response.status===422 ? `Schema validation failed: ${validationMessage(detail.detail)}` : detail.detail || `Comparison failed (${response.status})`) }
-      showResult(await response.json() as Result)
+      showResult(await response.json() as Result, submittedText)
     } catch (e) { setError(e instanceof Error ? e.message : 'Comparison failed') }
     finally { setBusy(false) }
   }

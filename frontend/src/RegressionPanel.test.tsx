@@ -30,4 +30,5 @@ test('saves a case, passes pinned replay, then shows a candidate failure', async
   expect(await screen.findByText('Regression failed')).toBeInTheDocument()
   expect(screen.getAllByText('snapshots[1].annotation.consequence').length).toBeGreaterThan(0)
   expect(fetchMock).toHaveBeenCalledTimes(4)
+  expect(fetchMock.mock.calls[0][0]).toBe('/api/regression-cases?source_investigation_id=investigation1')
 })

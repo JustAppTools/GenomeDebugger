@@ -12,6 +12,10 @@ export function blankInput(): InvestigationInput {
 
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
+export function normalizeGuidedInput(value: unknown): unknown {
+  return object(value) && value.synthetic === undefined ? {...value, synthetic:false} : value
+}
+
 // Check types before accessing any nested imported value. Semantic checks below
 // can then use strings and arrays safely while keeping incomplete drafts editable.
 function structureErrors(value: unknown): string[] {
@@ -77,9 +81,10 @@ function structureErrors(value: unknown): string[] {
 export function isGuidedInput(value: unknown): value is InvestigationInput {return structureErrors(value).length === 0}
 
 export function validateGuidedInput(value: unknown): string[] {
-  const errors = structureErrors(value)
+  const normalized = normalizeGuidedInput(value)
+  const errors = structureErrors(normalized)
   if (errors.length) return errors
-  const input = value as InvestigationInput
+  const input = normalized as InvestigationInput
   function text(value: string, max: number, path: string) {
     if (!value.trim()) errors.push(`${path} is required`)
     else if (value.length > max) errors.push(`${path} exceeds ${max} characters`)
@@ -154,7 +159,8 @@ function AnnotationFields({value,prefix,onChange}:{value:Annotation;prefix:strin
 }
 
 export default function GuidedInput({value,onChange,onRun,busy}:{value:unknown;onChange:(value:InvestigationInput)=>void;onRun:()=>void;busy:boolean}) {
-  const input = value === null ? blankInput() : isGuidedInput(value) ? value : null
+  const normalized = normalizeGuidedInput(value)
+  const input = normalized === null ? blankInput() : isGuidedInput(normalized) ? normalized : null
   if (!input) return <div className="guide-errors" role="alert">This input has invalid field types. Repair them in JSON mode: {validateGuidedInput(value).join('; ')}.</div>
   function edit(change:(next:InvestigationInput)=>void) {
     const next = JSON.parse(JSON.stringify(input)) as InvestigationInput

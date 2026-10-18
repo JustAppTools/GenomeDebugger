@@ -12,6 +12,7 @@ from app.engine import compare, digest
 from app.models import InvestigationInput
 from app.ncbi import ReferenceCheckError
 from app.storage import save, save_allele_check
+from app.version import ENGINE_VERSION
 
 FIXTURE = json.loads((Path(__file__).resolve().parents[2]/'fixtures/ncbi-repeat-deletion-observation.json').read_text())
 
@@ -77,7 +78,7 @@ def test_allele_check_survives_bundle_and_cache_round_trip(tmp_path,monkeypatch)
     assert api.post(f'/api/investigations/{sample.id}/allele-check',json={'mode':'cache_only'}).json()['id']==check.id
     report=api.get(f'/api/investigations/{sample.id}/report.md')
     assert report.status_code==200 and 'NC_000001.11:10003:CCC:CC' in report.text
-    assert 'Engine version: `0.6.0`' in report.text
+    assert f'Engine version: `{ENGINE_VERSION}`' in report.text
     bundle['entries']['allele_check']['observations'][0]['normalized']['position']+=1
     bundle['sha256']['allele_check']=digest(bundle['entries']['allele_check'])
     with pytest.raises(ValueError,match='preserved reference'):

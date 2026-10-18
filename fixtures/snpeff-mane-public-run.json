@@ -433,15 +433,15 @@
     "artifact": null
   },
   "check": {
-    "id": "941d4a24b86ce61a6fd2",
+    "id": "9aed2c2d6f66740f36d6",
     "source_record_id": "e5a62303dbd17832682b",
     "source_response_sha256": "66660c0d9cdeac58972a9313b1e32b1b811eb233776751cafad8efd2876175a3",
-    "checked_at": "2026-10-18T02:11:11.388252+00:00",
+    "checked_at": "2026-10-18T21:51:28.462252+00:00",
     "snpeff_version": "SnpEff\t5.4c\t2026-02-23",
     "genome_database": "GRCh38.mane.1.0.ensembl",
     "database_sha256": "0b231feb4ae6179549224335df06ef54556db181791a12819e9db20ac309c5e1",
-    "vcf_sha256": "b7a71562f15cf0ba4722c0ece8ebef607dcb4e233c32fe215734dc56adb3c994",
-    "vcf_text": "##fileformat=VCFv4.2\n##SnpEffVersion=\"5.4c (build 2026-02-23 07:25), by Pablo Cingolani\"\n##SnpEffCmd=\"SnpEff  -noStats GRCh38.mane.1.0.ensembl C:/Users/vicsp/AppData/Local/Temp/genomedebugger-snpeff-kdhne7_5/input.vcf \"\n##INFO=<ID=ANN,Number=.,Type=String,Description=\"Functional annotations: 'Allele | Annotation | Annotation_Impact | Gene_Name | Gene_ID | Feature_Type | Feature_ID | Transcript_BioType | Rank | HGVS.c | HGVS.p | cDNA.pos / cDNA.length | CDS.pos / CDS.length | AA.pos / AA.length | Distance | ERRORS / WARNINGS / INFO' \">\n##INFO=<ID=LOF,Number=.,Type=String,Description=\"Predicted loss of function effects for this variant. Format: 'Gene_Name | Gene_ID | Number_of_transcripts_in_gene | Percent_of_transcripts_affected'\">\n##INFO=<ID=NMD,Number=.,Type=String,Description=\"Predicted nonsense mediated decay effects for this variant. Format: 'Gene_Name | Gene_ID | Number_of_transcripts_in_gene | Percent_of_transcripts_affected'\">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n1\t6524705\t.\tC\tT\t.\tPASS\tANN=T|3_prime_UTR_variant|MODIFIER|NOL9|ENSG00000162408.11|transcript|ENST00000377705.6|protein_coding|12/12|c.*1149G>A|||||1149|\n",
+    "vcf_sha256": "f5f4cf6a3d50782bad1f3c65e21344efc22d6a9a98d0f4507f58a6a9c4b91229",
+    "vcf_text": "##fileformat=VCFv4.2\n##SnpEffVersion=\"5.4c (build 2026-02-23 07:25), by Pablo Cingolani\"\n##SnpEffCmd=\"SnpEff  -noStats GRCh38.mane.1.0.ensembl C:/Users/vicsp/AppData/Local/Temp/genomedebugger-snpeff-ie1ppll8/input.vcf \"\n##INFO=<ID=ANN,Number=.,Type=String,Description=\"Functional annotations: 'Allele | Annotation | Annotation_Impact | Gene_Name | Gene_ID | Feature_Type | Feature_ID | Transcript_BioType | Rank | HGVS.c | HGVS.p | cDNA.pos / cDNA.length | CDS.pos / CDS.length | AA.pos / AA.length | Distance | ERRORS / WARNINGS / INFO' \">\n##INFO=<ID=LOF,Number=.,Type=String,Description=\"Predicted loss of function effects for this variant. Format: 'Gene_Name | Gene_ID | Number_of_transcripts_in_gene | Percent_of_transcripts_affected'\">\n##INFO=<ID=NMD,Number=.,Type=String,Description=\"Predicted nonsense mediated decay effects for this variant. Format: 'Gene_Name | Gene_ID | Number_of_transcripts_in_gene | Percent_of_transcripts_affected'\">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n1\t6524705\t.\tC\tT\t.\tPASS\tANN=T|3_prime_UTR_variant|MODIFIER|NOL9|ENSG00000162408.11|transcript|ENST00000377705.6|protein_coding|12/12|c.*1149G>A|||||1149|\n",
     "status": "unresolved",
     "matches": [],
     "unmatched_ensembl": [
@@ -467,8 +467,8 @@
     ],
     "explanation": "No exact transcript IDs matched; transcript releases may differ.",
     "execution": {
-      "started_at": "2026-10-18T02:11:03.556176+00:00",
-      "elapsed_seconds": 7.828,
+      "started_at": "2026-10-18T21:51:22.161979+00:00",
+      "elapsed_seconds": 6.313,
       "command": [
         "D:\\Creation\\GenomeDebugger\\tools\\snpeff\\java\\jdk-21.0.12.1+1-jre\\bin\\java.exe",
         "-Xmx4g",
@@ -483,7 +483,7 @@
         "-nodownload",
         "-noStats",
         "GRCh38.mane.1.0.ensembl",
-        "C:/Users/vicsp/AppData/Local/Temp/genomedebugger-snpeff-kdhne7_5/input.vcf"
+        "C:/Users/vicsp/AppData/Local/Temp/genomedebugger-snpeff-ie1ppll8/input.vcf"
       ],
       "java_sha256": "82051fdab26319d77d20cc0065045d05ec00b3e3d05f44935d7c06b96b621d55",
       "jar_sha256": "5e8f75cbf908a33c6fb2e65c81e66fe31236cb21bb0195541c4703d8202c22b3",
@@ -518,7 +518,7 @@
       "database_sha256": "0b231feb4ae6179549224335df06ef54556db181791a12819e9db20ac309c5e1",
       "input_vcf": "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n1\t6524705\t.\tC\tT\t.\tPASS\t.\n",
       "input_vcf_sha256": "aefe70fa857b1fbc361536b9a4748a435d395ce0ba0a9a5cb3c7b17b1f5c8a7d",
-      "output_vcf_sha256": "b7a71562f15cf0ba4722c0ece8ebef607dcb4e233c32fe215734dc56adb3c994",
+      "output_vcf_sha256": "f5f4cf6a3d50782bad1f3c65e21344efc22d6a9a98d0f4507f58a6a9c4b91229",
       "stderr": "",
       "software_version": "SnpEff\t5.4c\t2026-02-23",
       "artifact_sources": {
@@ -527,7 +527,9 @@
         "snpeff": "https://snpeff-public.s3.amazonaws.com/versions/snpEff_latest_core.zip",
         "snpeff_archive_sha256": "3b06a1e1f939e7ebd5433387f088c1d3d1e0a7d472d63f39161b1fe9f00adf33",
         "database": "https://snpeff-public.s3.amazonaws.com/databases/v5_2/snpEff_v5_2_GRCh38.mane.1.0.ensembl.zip"
-      }
+      },
+      "assembly_name": "GRCh38",
+      "assembly_accession": "GCA_000001405.29"
     }
   }
 }

@@ -17,10 +17,18 @@ Explicit source actions use `ensembl.py` for current GRCh38 SNVs, `ncbi.py` for 
 - `ReferenceCheck`: source-bound NCBI FASTA, SPDI/HGVS responses, pinned assembly metadata, hashes, agreement flags.
 - `AlleleCheck`: investigation-bound observations for both primary variants, complete ref validation, SPDI/HGVS, URLs/hashes, agree/disagree status. Separate from the stored local-context result.
 - `SnpEffCheck`: ANN VCF, declared metadata, exact transcript matches and unmatched rows, optional recorded local execution/artifact provenance.
-- Bundle version 2: investigation, up to two linked sources, exact linked source checks, optional allele check, entry hashes, engine version. Verification derives observations from responses and replays output. Frozen `legacy_engine_v050.py` verifies archived 0.5.0 records only.
+- Bundle version 2: investigation, up to two linked sources, exact linked source checks, optional allele check, entry hashes, engine version. Verification derives observations from responses and replays output. Frozen `legacy_engine_v050.py` and `legacy_engine_v060.py` verify their respective archived engine outputs. Current comparisons use version 0.6.1.
 
 ## Boundaries
 
 Local-context identity requires identical declared assembly/accession/context and equal-length substitution edits. Length-changing edits remain unresolved in the pure engine. Independent NCBI checks can establish matching observed contextual alleles on pinned primary nuclear sequences; cross-assembly mapping remains unsupported. Clinical and causal boundaries are described in [scientific-validity.md](scientific-validity.md).
 
 Ordinary POST requests accept 1 MB. Bundle import/verification and compact export share a 32 MB limit. SQLite has a configurable storage budget and backup support. Result IDs include engine version so replay cannot overwrite history. Hashes and replay detect contradictions but do not authenticate external data or imported execution claims. A current API capture never substitutes for a historical artifact.
+
+## 0.6.1 integrity changes
+
+Artifact saves and bundle imports share immutable conflict checks. Bundle imports preflight all records and capacity inside a single SQLite transaction, then roll back all writes on failure. Connections close explicitly. Storage budgets subtract reusable free pages and identical records are not charged again.
+
+Bundle manifests receive strict type validation before verification. Source-generated VEP snapshots must match captured variants and annotation rows; declared full sets cannot omit rows. Historical selected-row formats and the earlier equivalent release label remain supported. A separately named custom tool can cite VEP as an input while recording transformed outputs. SnpEff verification checks derived explanatory prose as well as structured outcomes.
+
+The local runner permits reviewed database/build combinations, requires matching source assembly metadata, and hashes the exact input bytes it writes. Execution records retain assembly name and accession. Browser responses are associated with draft/query revisions; obsolete source replies cannot reactivate old comparisons. Regression discovery uses a source-investigation filter and lists expose pagination.

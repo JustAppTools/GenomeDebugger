@@ -14,6 +14,7 @@ import time
 from .engine import digest
 from .ensembl import SourceRecord
 from .snpeff import SnpEffCheck, SnpEffCheckRequest, SnpEffExecution, compare_snpeff
+from .snpeff_databases import validate_database
 
 DEFAULT_MANIFEST = Path(__file__).resolve().parents[2]/"tools/snpeff/runtime.json"
 _run_lock = threading.Lock()
@@ -31,6 +32,7 @@ def _manifest() -> dict:
     manifest=json.loads(path.read_text())
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}",manifest.get("genome","")):
         raise ValueError("Pinned SnpEff database name is invalid")
+    validate_database(manifest)
     return manifest
 
 
@@ -66,6 +68,10 @@ def run_snpeff(record: SourceRecord) -> SnpEffCheck:
         raise ValueError("Another SnpEff run is active; wait for it to finish")
     try:
         manifest=_manifest()
+        expected = validate_database(manifest)
+        if (record.assembly_accession != expected["assembly_accession"] or
+                record.assembly_name not in {expected["assembly_name"], "GRCh38.p14"}):
+            raise ValueError("Source assembly does not match the pinned SnpEff database assembly")
         files=_verify_artifacts(manifest)
         q=record.query
         vcf=("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
@@ -74,7 +80,9 @@ def run_snpeff(record: SourceRecord) -> SnpEffCheck:
         started=time.monotonic()
         with tempfile.TemporaryDirectory(prefix="genomedebugger-snpeff-") as directory:
             input_file=Path(directory)/"input.vcf"
-            input_file.write_text(vcf,encoding='utf-8')
+            input_bytes = vcf.encode('utf-8')
+            input_file.write_bytes(input_bytes)
+            input_sha256 = file_sha(input_file)
             command=[manifest["java"],"-Xmx4g","-jar",Path(manifest["jar"]).as_posix(),"ann","-c",Path(manifest["config"]).as_posix(),
                      "-dataDir",Path(os.path.relpath(manifest["data_dir"],Path(manifest["config"]).parent)).as_posix(),
                      "-noLog","-nodownload","-noStats",manifest["genome"],input_file.as_posix()]
@@ -94,9 +102,11 @@ def run_snpeff(record: SourceRecord) -> SnpEffCheck:
         check.execution=SnpEffExecution(started_at=started_at,elapsed_seconds=round(time.monotonic()-started,3),
             command=command,java_sha256=manifest["java_sha256"],jar_sha256=manifest["jar_sha256"],
             config_sha256=manifest["config_sha256"],database_files=files,database_sha256=database_hash,
-            input_vcf=vcf,input_vcf_sha256=hashlib.sha256(vcf.encode()).hexdigest(),
+            input_vcf=vcf,input_vcf_sha256=input_sha256,
             output_vcf_sha256=check.vcf_sha256,stderr=completed.stderr,software_version=manifest["snpeff_version"])
         check.execution.artifact_sources=manifest.get("sources",{})
+        check.execution.assembly_name=expected["assembly_name"]
+        check.execution.assembly_accession=expected["assembly_accession"]
         return check
     finally:
         _run_lock.release()

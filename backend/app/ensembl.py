@@ -171,6 +171,7 @@ def snapshot_from_record(record: SourceRecord, transcript_id: str, side: str,
                           if record.origin == "current_api" else None))
     source_release = ("reported " if record.origin == "current_api" else "declared historical ") + ",".join(str(x) for x in record.releases)
     configuration = {"assembly_accession": record.assembly_accession,
+                     "source_annotation_scope": "all_transcripts",
                      "source_record_id": record.id, "retrieved_at": record.retrieved_at}
     if reference_check:
         configuration.update({"reference_check_id": reference_check.id,

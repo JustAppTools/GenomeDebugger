@@ -1,27 +1,31 @@
-# Current state - 2026-10-17
+# Current state - 2026-10-18
 
-Version 0.6.0 fixes all seven defects from the latest review and adds guided multi-variant editing, independent reference-backed primary allele checks, pinned local SnpEff execution, and preserved historical VEP comparison.
+Version 0.6.1 fixes all 14 findings in `docs/bug-audit-2026-10-18.md`.
 
-## Verified in this working tree
+## Verification
 
-- Backend unit/API tests: 71 passed. Both existing saved regression cases pass current-engine replay.
-- Frontend unit tests: 13 passed. TypeScript and Vite production build pass.
-- Browser workflows: 6 passed, covering demo/evidence/regression, mobile guide, offline failures, malformed imported JSON, multi-variant editing, a bundle larger than 1 MB, and historical artifacts with two-source export.
-- All 8 existing saved investigations export and verify as current-engine bundles; originals stay unchanged. Archived 0.5.0 bundles retain their declared replay rules.
-- Live NCBI repeat-deletion observations normalized two shifted descriptions to the same contextual SPDI and genomic HGVS. Original responses are preserved in `fixtures/ncbi-repeat-deletion-observation.json`.
-- Official Java/SnpEff and MANE database installed locally under ignored `tools/snpeff`, with artifact hashes verified before/after a real run. Exact transcript-version differences correctly yielded unresolved. Captured output/provenance: `fixtures/snpeff-mane-public-run.json`.
-- Production dependency audit: no vulnerabilities. Local services restarted at ports 8000/5173; health reports version 0.6.0 and explicit input/bundle limits.
+- Backend: 101 tests passed. Frontend: 21 tests passed. Browser workflows: 9 passed, including both request races and omitted defaults.
+- TypeScript/Vite production build passes.
+- Existing saved investigations remain readable; their exports verify under the current engine. Both existing pinned regression baselines pass.
+- Archived 0.5.0 and 0.6.0 results retain frozen verification rules. New 0.6.1 results receive separate IDs.
+- A real pinned SnpEff run completed with validated GRCh38 assembly metadata and exact input-byte hashing. Its bundle verified. The captured fixture was refreshed; transcript-version coverage still correctly remains unresolved.
+- Local runtime setup supports safe assembly-metadata migration for the known existing installation without replacing its pinned files.
 
-## Correctness fixes
+## Fixes
 
-1. Candidate checks assert absolute additional outputs, catching shared drift.
-2. All length-changing complex replacements remain conservative without independent reference evidence.
-3. Full annotation-set matching includes the selected primary row.
-4. Bundle checks reconstruct NCBI metadata, observations, and agreement flags from raw responses.
-5. Compact export and import share a 32 MB limit; ordinary input stays capped at 1 MB.
-6. Tuple matching and escaped field paths prevent delimiter collisions.
-7. Imported nested types are checked before guided rendering; invalid JSON remains editable.
+1. VEP source/snapshot consistency and declared complete annotation-set checks.
+2. Immutable artifact conflicts rejected instead of silently ignored.
+3. Exact Windows input-byte hashing for local SnpEff.
+4. Reviewed database/build and source-assembly validation before execution.
+5. Atomic bundle import with full rollback on failure.
+6. Reusable SQLite pages included in storage capacity; identical imports need no new capacity.
+7. Later draft edits remain visibly stale when an earlier comparison completes.
+8. Changed queries invalidate pending source/check/comparison responses.
+9. Clinical assertion dates retained as metadata differences.
+10. Strict bundle-manifest validation returns HTTP 422 for invalid types.
+11. Derived SnpEff explanations checked against replay.
+12. Regression discovery filtered by investigation; older lists have pagination.
+13. All generated difference-path lengths supported by overrides within the request budget.
+14. Guided mode applies the optional synthetic default while rejecting invalid explicit values.
 
-## Scientific boundaries
-
-Independent NCBI checks currently cover primary variants on pinned GRCh38.p14 primary nuclear sequences. Cross-assembly mapping, mitochondrial HGVS, VRS, and normalization of extra variant rows remain unsupported. Historical output comparison is supported with declared provenance; full original pipeline reproduction still requires its original artifacts. Local SnpEff execution preserves artifact provenance but does not establish causal certainty. Imported hashes and execution metadata are not external authentication. See `docs/scientific-validity.md` and `docs/roadmap.md`.
+Scientific boundaries remain in `docs/scientific-validity.md`. Cross-assembly mapping, full historical pipeline reproduction, VRS, and clinical interpretation remain outside the current implementation.

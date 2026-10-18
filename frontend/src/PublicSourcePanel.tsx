@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowRight, Database, ExternalLink, Globe2 } from 'lucide-react'
 import type { Result } from './types'
 import SnpEffPanel from './SnpEffPanel'
@@ -32,6 +32,7 @@ interface ReferenceCheck {
 interface ReferenceCheckResult { check: ReferenceCheck; access: 'cache' | 'fetched' | 'cached_after_error'; warning?: string | null }
 
 export default function PublicSourcePanel({ onCompare }: { onCompare: (result: Result) => void }) {
+  const queryRevision = useRef(0)
   const [chromosome, setChromosome] = useState('1')
   const [position, setPosition] = useState('6524705')
   const [ref, setRef] = useState('C')
@@ -53,18 +54,21 @@ export default function PublicSourcePanel({ onCompare }: { onCompare: (result: R
   const rowA = record?.transcripts.find(row=>row.transcript_id===transcriptA)
   const rowB = record?.transcripts.find(row=>row.transcript_id===transcriptB)
 
-  function change(setter: (s: string) => void, value: string) { setter(value); setRecord(null); setCheck(null); setError(''); setWarning(''); setCheckWarning('') }
+  function change(setter: (s: string) => void, value: string) { queryRevision.current++; setter(value); setRecord(null); setCheck(null); setError(''); setWarning(''); setCheckWarning('') }
   function useSecondExample() {
+    queryRevision.current++
     setChromosome('9'); setPosition('133256042'); setRef('C'); setAlt('A')
     setRecord(null); setCheck(null); setError(''); setWarning(''); setCheckWarning('')
   }
 
   async function lookup(mode: 'cache_only' | 'fetch') {
+    const revision = queryRevision.current
     setBusy(true); setError(''); setWarning('')
     try {
       const response = await fetch('/api/sources/ensembl/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, mode }) })
       const body = await response.json().catch(() => ({ detail: `Source lookup returned a non-JSON response (${response.status})` }))
       if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `Lookup failed (${response.status})`)
+      if (revision !== queryRevision.current) return
       const found = body as LookupResult
       setRecord(found.record); setAccess(found.access); setWarning(found.warning ?? ''); setCheck(null); setCheckWarning('')
       const first = found.record.transcripts[0]
@@ -72,32 +76,35 @@ export default function PublicSourcePanel({ onCompare }: { onCompare: (result: R
         ?? found.record.transcripts.find(row => row.gene_id === first?.gene_id && row.consequence_terms.join(';') !== first.consequence_terms.join(';'))
       setTranscriptA(first?.transcript_id ?? '')
       setTranscriptB((contrasting ?? found.record.transcripts[1])?.transcript_id ?? '')
-    } catch (e) { setRecord(null); setError(e instanceof Error ? e.message : 'Lookup failed') }
+    } catch (e) { if (revision !== queryRevision.current) return; setRecord(null); setError(e instanceof Error ? e.message : 'Lookup failed') }
     finally { setBusy(false) }
   }
 
   async function referenceCheck(mode: 'cache_only' | 'fetch') {
+    const revision = queryRevision.current
     if (!record) return
     setBusy(true); setError(''); setCheckWarning('')
     try {
       const response = await fetch(`/api/sources/ensembl/records/${record.id}/reference-check`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) })
       const body = await response.json().catch(() => ({ detail: `NCBI check returned a non-JSON response (${response.status})` }))
       if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `NCBI check failed (${response.status})`)
+      if (revision !== queryRevision.current) return
       const found = body as ReferenceCheckResult
       setCheck(found.check); setCheckAccess(found.access); setCheckWarning(found.warning ?? '')
-    } catch (e) { setCheck(null); setError(e instanceof Error ? e.message : 'NCBI check failed') }
+    } catch (e) { if (revision !== queryRevision.current) return; setCheck(null); setError(e instanceof Error ? e.message : 'NCBI check failed') }
     finally { setBusy(false) }
   }
 
   async function compare() {
+    const revision = queryRevision.current
     if (!record || !transcriptA || !transcriptB || transcriptA === transcriptB) return
     setBusy(true); setError('')
     try {
       const response = await fetch(`/api/sources/ensembl/records/${record.id}/compare`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript_a: transcriptA, transcript_b: transcriptB }) })
       const body = await response.json().catch(() => ({ detail: `Comparison returned a non-JSON response (${response.status})` }))
       if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `Comparison failed (${response.status})`)
-      onCompare(body as Result)
-    } catch (e) { setError(e instanceof Error ? e.message : 'Comparison failed') }
+      if (revision === queryRevision.current) onCompare(body as Result)
+    } catch (e) { if (revision !== queryRevision.current) return; setError(e instanceof Error ? e.message : 'Comparison failed') }
     finally { setBusy(false) }
   }
 

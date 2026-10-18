@@ -1,6 +1,6 @@
 # Roadmap
 
-## Completed through 0.6.0
+## Completed through 0.6.1
 
 - Strict snapshot/provenance schema, conservative local comparison, condition-aware clinical comparisons, evidence-linked synthetic replay, meaningful-change overrides, and offline demo.
 - Guided primary and additional variant/annotation editing, advanced JSON, saved-record search and retention, evidence inspection, regression workbench, JSON/Markdown exports, backend status, and Windows startup.
@@ -11,6 +11,8 @@
 - Historical VEP output import with original bytes and declared metadata; comparisons and bundles can preserve two sources.
 - Replay-checked bundles up to 32 MB, archived 0.5.0 verification, versioned current result IDs, storage backup, and unit/API/browser suites.
 - Fixes for shared candidate drift, complex replacement identity, transcript-selector row matching, NCBI bundle contradictions, large bundle import, delimiter key collisions, and malformed guided input.
+
+- Fixed all 14 findings in the October 18 audit, with focused backend and browser regression coverage, atomic imports, immutable artifact conflicts, exact execution bytes, assembly validation, storage recovery, draft/query freshness, clinical dates, manifest validation, pagination, and guided defaults.
 
 ## Further development
 

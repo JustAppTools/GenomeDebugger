@@ -43,6 +43,8 @@ class SnpEffExecution(StrictModel):
     stderr: str
     software_version: str
     artifact_sources: dict[str,str] = Field(default_factory=dict)
+    assembly_name: str | None = None
+    assembly_accession: str | None = None
 
 
 class SnpEffCheck(StrictModel):
