@@ -1,6 +1,6 @@
 # GenomeDebugger
 
-GenomeDebugger is a local, research-oriented workstation for comparing two genomic analysis snapshots and tracing why their results differ. Version 0.6.2 fixes the seven findings in the [additional 0.6.1 audit](docs/bug-audit-0.6.1-2026-10-18.md): check applicability, ANN warnings, primary variant selection, overlapping record requests, deletion cleanup, SPDI bounds, and regression names. Guided multi-variant editing, NCBI allele checks, pinned SnpEff execution, and historical VEP imports remain available. The synthetic transcript-selection investigation and regression workflow remain available offline. The tool does **not** assign clinical pathogenicity.
+GenomeDebugger is a local, research-oriented workstation for comparing two genomic analysis snapshots and tracing why their results differ. Version 0.6.3 fixes the six findings in the [0.6.2 audit](docs/bug-audit-0.6.2-2026-10-18.md): execution provenance, malformed source rows, source validation before saving, deletion races, transcript-selection freshness, and Unicode limits. Guided multi-variant editing, NCBI allele checks, pinned SnpEff execution, and historical VEP imports remain available. The synthetic transcript-selection investigation and regression workflow remain available offline. The tool does **not** assign clinical pathogenicity.
 
 ## Start on Windows
 
@@ -84,11 +84,15 @@ The SnpEff comparison is available below the Ensembl record. Paste one annotated
 
 Bundle import validates linked VEP outputs against their preserved source and checks every derived SnpEff outcome, including its explanation. Source-generated comparisons declare whether they contain the full transcript set; older selected-row snapshots remain supported. Custom postprocessors must identify their own tool in provenance rather than claim direct VEP output. All linked records import in one transaction. Conflicting immutable artifact IDs return HTTP 409; identical re-imports do not consume new capacity.
 
+Source-linked direct VEP claims are validated before generic comparisons and regression candidates are saved. Both VEP adapters and bundle verification reject malformed transcript rows rather than silently omit them from a complete set. SnpEff origin flags must agree with the preserved check's execution record. Reports derive execution provenance from that record, and comparator evidence stays neutral about execution. Preserved or imported execution records are not external attestations.
+
 Linked NCBI reference and SnpEff annotation checks must apply to the complete primary variant in both snapshots: assembly, sequence, position, reference, and alternate allele. Known pinned GRCh38 aliases are supported. Transformed output alleles must remove inapplicable checks; generic comparisons and regression candidates require the original check records locally. All ANN warnings/errors are checked before filtering feature types. Invalid normalized SPDI intervals are rejected against pinned sequence lengths, including during bundle replay.
 
 Storage budgeting counts reusable SQLite pages so deleting unpinned investigations restores usable space. Saved investigations have page controls, preserved sources and run history can load older entries, and regression discovery filters by investigation before pagination. API lists accept `limit` and `offset`; `/api/regression-cases` additionally accepts `source_investigation_id`.
 
 Deleting an investigation removes its owned allele checks in the same transaction; shared source records remain preserved. Switching the selected primary variant retains complete collection membership. Only the latest requested investigation selection can replace the workspace. Default regression names respect the 200-character limit and validation errors identify the affected field.
+
+Owned allele checks require their investigation and matching input hash inside the save transaction. If an investigation is deleted while an external check runs, the late save returns HTTP 404 and leaves no owned data behind. Transcript/source selection changes invalidate pending comparisons in both source panels and preserve the newer selection for retry. Guided text limits count Unicode code points consistently with the API.
 
 Clinical assertion date differences are retained as metadata and are nonmeaningful by default. A field-specific override can change that policy. Overrides support all generated field-path lengths within the existing request-size and override-count limits.
 

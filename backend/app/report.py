@@ -1,8 +1,10 @@
 from .models import InvestigationResult
 from .allele_check import AlleleCheck
+from .snpeff import SnpEffCheck
 
 
-def markdown_report(result: InvestigationResult, allele_check: AlleleCheck | None = None) -> str:
+def markdown_report(result: InvestigationResult, allele_check: AlleleCheck | None = None,
+                    annotation_check: SnpEffCheck | None = None) -> str:
     a, b = result.input.snapshots
     public_source = bool(a.provenance.configuration.get("source_record_id") and b.provenance.configuration.get("source_record_id"))
     historical = any(s.provenance.configuration.get("source_origin")=="historical_artifact" for s in (a,b))
@@ -55,9 +57,11 @@ def markdown_report(result: InvestigationResult, allele_check: AlleleCheck | Non
         check_id = a.provenance.configuration.get("reference_check_id")
         if check_id:
             lines.extend([f"Linked NCBI allele check: `{check_id}` ({a.provenance.configuration.get('reference_check_status', 'status unknown')}). Retrieve its preserved responses at `/api/sources/reference-checks/{check_id}`. This does not validate VEP consequences.", ""])
-        annotation_id = a.provenance.configuration.get("annotation_check_id")
+        annotation_id = result.input.annotation_check.id if result.input.annotation_check else None
         if annotation_id:
-            origin = "recorded local execution" if a.provenance.configuration.get("annotation_check_origin")=="local_execution" else "user-supplied output"
-            lines.extend([f"Linked SnpEff ANN check ({origin}): `{annotation_id}` ({a.provenance.configuration.get('annotation_check_status', 'status unknown')}). Preserved execution records include artifact hashes; imported records are not externally authenticated. Output comparison does not establish causation.", ""])
+            preserved = annotation_check if annotation_check and annotation_check.id == annotation_id else None
+            origin = ("preserved execution record; not externally authenticated" if preserved and preserved.execution
+                      else "user-supplied output" if preserved else "execution provenance unavailable")
+            lines.extend([f"Linked SnpEff ANN check ({origin}): `{annotation_id}` ({result.input.annotation_check.status}). Inspect preserved execution records for artifact hashes; imported records are not externally authenticated. Output comparison does not establish causation.", ""])
     lines.extend(["This report is for research and quality assurance; it is not a clinical interpretation.", ""])
     return "\n".join(lines)

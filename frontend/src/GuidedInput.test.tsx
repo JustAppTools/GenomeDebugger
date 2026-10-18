@@ -28,3 +28,16 @@ test.each([null,'false',0])('preserves an invalid explicit synthetic value: %j',
   expect(isGuidedInput(normalizeGuidedInput(value))).toBe(false)
   expect(validateGuidedInput(value).some(error=>error.includes('synthetic'))).toBe(true)
 })
+
+test('uses API-compatible Unicode lengths for titles and annotation identifiers',()=>{
+  const input=blankInput()
+  input.title='🧬'.repeat(200)
+  input.snapshots[0].annotation.gene_id='🧬'.repeat(100)
+  let errors=validateGuidedInput(input)
+  expect(errors.some(error=>error.includes('Title exceeds'))).toBe(false)
+  expect(errors.some(error=>error.includes('gene ID exceeds'))).toBe(false)
+  input.title+='🧬';input.snapshots[0].annotation.gene_id+='🧬'
+  errors=validateGuidedInput(input)
+  expect(errors).toContain('Title exceeds 200 characters')
+  expect(errors).toContain('Analysis 1: gene ID exceeds 100 characters')
+})

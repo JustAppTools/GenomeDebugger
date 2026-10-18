@@ -83,9 +83,8 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
                 "evidence_ids": [*ident.evidence_ids, "reference-check"],
             })
     if annotation_check:
-        local_run = all(s.provenance.configuration.get("annotation_check_origin") == "local_execution" for s in (a,b))
         evidence.append(Evidence(id="annotation-check", kind="independent_annotation_output",
-                                 description=("Preserved local SnpEff run compared with VEP transcripts; execution artifacts are recorded in the linked check" if local_run else "User-supplied SnpEff ANN output compared with preserved VEP transcripts; provenance is user declared"),
+                                 description="Linked SnpEff ANN output compared with preserved VEP transcripts; inspect the preserved check for execution provenance, which is not externally authenticated",
                                  data=annotation_check.model_dump()))
     differences: list[Difference] = []
 

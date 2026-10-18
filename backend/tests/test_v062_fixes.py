@@ -82,7 +82,7 @@ def test_preserved_checks_allow_pinned_aliases_and_reject_missing_evidence(tmp_p
     verify_bundle(create_bundle(main.DB, compare(payload)))
     monkeypatch.setattr(main, 'DB', tmp_path/'empty.db')
     response = api.post('/api/investigations', json=payload.model_dump(mode='json'))
-    assert response.status_code == 422 and 'preserved source and check' in response.text
+    assert response.status_code == 422 and 'preserved source' in response.text
 
 
 @pytest.mark.parametrize('warning', ['WARNING_REF_DOES_NOT_MATCH_GENOME', 'ERROR_CHROMOSOME_NOT_FOUND'])

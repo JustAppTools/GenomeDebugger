@@ -7,7 +7,7 @@ import json
 from pydantic import Field
 
 from .engine import digest
-from .ensembl import SourceQuery, SourceRecord, TranscriptConsequence, snapshot_from_record
+from .ensembl import SourceQuery, SourceRecord, parse_transcripts, snapshot_from_record
 from .models import InvestigationInput, StrictModel
 
 
@@ -50,16 +50,7 @@ def import_historical(payload: HistoricalImport) -> SourceRecord:
         body.get("seq_region_name")!=q.chromosome or body.get("start")!=q.position or
         body.get("end")!=q.position or body.get("allele_string")!=f"{q.ref}/{q.alt}"):
         raise ValueError("Historical VEP artifact does not match the declared GRCh38 SNV query")
-    rows=body.get("transcript_consequences")
-    if not isinstance(rows,list):
-        raise ValueError("Historical VEP artifact has no transcript consequences")
-    parsed=[]
-    for row in rows:
-        if isinstance(row,dict) and row.get("transcript_id") and row.get("gene_id") and row.get("consequence_terms"):
-            parsed.append(TranscriptConsequence(transcript_id=row["transcript_id"],gene_id=row["gene_id"],
-                consequence_terms=row["consequence_terms"],protein_consequence=row.get("hgvsp"),biotype=row.get("biotype")))
-    if not parsed or len({row.transcript_id for row in parsed})!=len(parsed):
-        raise ValueError("Historical VEP transcript IDs must be present and unique")
+    parsed = parse_transcripts(body.get("transcript_consequences"))
     artifact={"text":payload.raw_json,"sha256":hashlib.sha256(payload.raw_json.encode()).hexdigest(),
               "tool_version":payload.tool_version,"source_release":payload.source_release,
               "generated_at":payload.generated_at.isoformat(),"source_uri":payload.source_uri}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Result } from './types'
 
 interface Source {
@@ -9,6 +9,7 @@ interface Source {
 }
 
 export default function HistoricalPanel({onCompare}:{onCompare:(value:Result)=>void}) {
+  const selectionRevision = useRef(0)
   const [raw,setRaw]=useState('')
   const [query,setQuery]=useState({chromosome:'1',position:'6524705',ref:'C',alt:'T'})
   const [release,setRelease]=useState('')
@@ -42,6 +43,7 @@ export default function HistoricalPanel({onCompare}:{onCompare:(value:Result)=>v
     setIds(selected.map(item=>item?.id??''));setTranscripts(selected.map(item=>item?.transcripts[0]?.transcript_id??''))
   }
   async function run(action:'list'|'more'|'import'|'compare') {
+    const selected = selectionRevision.current
     setBusy(true);setError('');setNotice('')
     try {
       if(action==='list'||action==='more'){await list(action==='more');return}
@@ -54,8 +56,9 @@ export default function HistoricalPanel({onCompare}:{onCompare:(value:Result)=>v
       const body=await response.json()
       if(!response.ok)throw new Error(typeof body.detail==='string'?body.detail:`Preserved source action failed (${response.status}); check the declared fields`)
       if(action==='import'){setNotice(`Historical output preserved as ${body.id}. Its date, release, and software version are user declared.`);await list()}
-      else onCompare(body)
-    } catch(e){setError(e instanceof Error?e.message:'Preserved source action failed')}
+      else if(selected===selectionRevision.current)onCompare(body)
+      else setNotice('Selection changed while comparing. Compare again to use the current selection.')
+    } catch(e){if(action==='compare'&&selected!==selectionRevision.current)setNotice('Selection changed while comparing. Compare again to use the current selection.');else setError(e instanceof Error?e.message:'Preserved source action failed')}
     finally{setBusy(false)}
   }
   return <section className="panel source-panel"><span className="eyebrow">PRESERVED HISTORICAL OUTPUT</span><h2>Reconstruct a comparison from saved VEP output</h2>
@@ -71,8 +74,8 @@ export default function HistoricalPanel({onCompare}:{onCompare:(value:Result)=>v
     {hasMore&&<button className="button secondary" disabled={busy} onClick={()=>run('more')}>Load older sources</button>}
     {records.length>0&&<><div className="guide-grid">{ids.map((id,index)=>{
       const selected=records.find(item=>item.id===id)
-      return <div key={index}><h3>Analysis {index?'B':'A'}</h3><label className="guide-field">Source record<select aria-label={`Preserved analysis ${index+1} source`} value={id} onChange={e=>{const next=[...ids];next[index]=e.target.value;setIds(next);const rows=[...transcripts];rows[index]=records.find(item=>item.id===e.target.value)?.transcripts[0]?.transcript_id??'';setTranscripts(rows)}}>{records.map(item=><option value={item.id} key={item.id}>{item.origin==='historical_artifact'?'Historical artifact':'Current API capture'} · release {item.releases.join(',')} · {item.query.chromosome}:{item.query.position} · {item.id}</option>)}</select></label>
-        <label className="guide-field">Transcript<select aria-label={`Preserved analysis ${index+1} transcript`} value={transcripts[index]} onChange={e=>{const next=[...transcripts];next[index]=e.target.value;setTranscripts(next)}}>{selected?.transcripts.map(row=><option key={row.transcript_id} value={row.transcript_id}>{row.transcript_id} · {row.consequence_terms.join(', ')}</option>)}</select></label>
+      return <div key={index}><h3>Analysis {index?'B':'A'}</h3><label className="guide-field">Source record<select aria-label={`Preserved analysis ${index+1} source`} value={id} onChange={e=>{selectionRevision.current++;const next=[...ids];next[index]=e.target.value;setIds(next);const rows=[...transcripts];rows[index]=records.find(item=>item.id===e.target.value)?.transcripts[0]?.transcript_id??'';setTranscripts(rows)}}>{records.map(item=><option value={item.id} key={item.id}>{item.origin==='historical_artifact'?'Historical artifact':'Current API capture'} · release {item.releases.join(',')} · {item.query.chromosome}:{item.query.position} · {item.id}</option>)}</select></label>
+        <label className="guide-field">Transcript<select aria-label={`Preserved analysis ${index+1} transcript`} value={transcripts[index]} onChange={e=>{selectionRevision.current++;const next=[...transcripts];next[index]=e.target.value;setTranscripts(next)}}>{selected?.transcripts.map(row=><option key={row.transcript_id} value={row.transcript_id}>{row.transcript_id} · {row.consequence_terms.join(', ')}</option>)}</select></label>
         {selected?.artifact&&<p className="record-hash">Declared run: {selected.artifact.generated_at} · VEP {selected.artifact.tool_version} · Original artifact SHA-256 {selected.artifact.sha256}</p>}
       </div>
     })}</div><button className="button primary" disabled={busy||ids.some(id=>!id)||transcripts.some(id=>!id)||(ids[0]===ids[1]&&transcripts[0]===transcripts[1])} onClick={()=>run('compare')}>Compare preserved sources</button></>}

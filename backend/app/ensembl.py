@@ -42,6 +42,28 @@ class TranscriptConsequence(StrictModel):
     biotype: str | None = None
 
 
+def parse_transcripts(rows: object) -> list[TranscriptConsequence]:
+    """Require every captured transcript row to be usable before claiming completeness."""
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("VEP transcript consequences must be a nonempty array")
+    parsed = []
+    for index, row in enumerate(rows):
+        if (not isinstance(row, dict) or
+                any(not isinstance(row.get(key), str) or not row[key].strip()
+                    for key in ('transcript_id', 'gene_id')) or
+                not isinstance(row.get('consequence_terms'), list) or not row['consequence_terms'] or
+                any(not isinstance(term, str) or not term.strip() for term in row['consequence_terms'])):
+            raise ValueError(f"VEP transcript row {index + 1} is malformed; no rows were omitted")
+        try:
+            parsed.append(TranscriptConsequence(transcript_id=row['transcript_id'], gene_id=row['gene_id'],
+                consequence_terms=row['consequence_terms'], protein_consequence=row.get('hgvsp'), biotype=row.get('biotype')))
+        except ValidationError as exc:
+            raise ValueError(f"VEP transcript row {index + 1} is malformed") from exc
+    if len({row.transcript_id for row in parsed}) != len(parsed):
+        raise ValueError("VEP transcript identifiers must be unique")
+    return parsed
+
+
 class SourceRecord(StrictModel):
     id: str
     query: SourceQuery
@@ -122,26 +144,10 @@ def fetch_record(query: SourceQuery, client: httpx.Client | None = None) -> Sour
                 or item.get("start") != query.position or item.get("end") != query.position
                 or item.get("allele_string") != f"{query.ref}/{query.alt}"):
             raise SourceError("VEP coordinates, allele, or assembly did not match the request")
-        rows = item.get("transcript_consequences")
-        if not isinstance(rows, list):
-            raise SourceError("VEP transcript consequences were absent")
-        transcripts = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            if row.get("transcript_id") and row.get("gene_id") and isinstance(row.get("consequence_terms"), list) and row["consequence_terms"]:
-                try:
-                    transcripts.append(TranscriptConsequence(
-                        transcript_id=row["transcript_id"], gene_id=row["gene_id"],
-                        consequence_terms=row["consequence_terms"],
-                        protein_consequence=row.get("hgvsp"), biotype=row.get("biotype"),
-                    ))
-                except ValidationError as exc:
-                    raise SourceError("VEP returned a malformed transcript consequence") from exc
-        if not transcripts:
-            raise SourceError("VEP returned no usable transcript consequences")
-        if len({row.transcript_id for row in transcripts}) != len(transcripts):
-            raise SourceError("VEP returned duplicate transcript identifiers")
+        try:
+            transcripts = parse_transcripts(item.get("transcript_consequences"))
+        except ValueError as exc:
+            raise SourceError(str(exc)) from exc
         canonical = json.dumps(item, sort_keys=True, separators=(",", ":"))
         raw_hash = hashlib.sha256(canonical.encode()).hexdigest()
         retrieved_at = datetime.now(timezone.utc).isoformat()
@@ -162,6 +168,8 @@ def fetch_record(query: SourceQuery, client: httpx.Client | None = None) -> Sour
 def snapshot_from_record(record: SourceRecord, transcript_id: str, side: str,
                          reference_check: ReferenceCheckSummary | None = None,
                          annotation_check: AnnotationCheckSummary | None = None) -> Snapshot:
+    if parse_transcripts(record.source_response.get("transcript_consequences")) != record.transcripts:
+        raise ValueError("VEP transcript rows do not match the preserved response")
     rows = {row.transcript_id: row for row in record.transcripts}
     if transcript_id not in rows:
         raise ValueError("selected transcript was not present in the cached record")
@@ -209,3 +217,26 @@ def comparison_input(record: SourceRecord, selection: CompareTranscripts,
     return InvestigationInput(title=f"{label} Ensembl transcript comparison: {q.chromosome}:{q.position} {q.ref}>{q.alt}",
                               synthetic=False, snapshots=snapshots, reference_check=reference_check,
                               annotation_check=annotation_check)
+
+
+def validate_source_snapshot(source, snapshot):
+    # Custom tools may cite the response as an input. A VEP-generated snapshot
+    # claims that its outputs were derived directly from this captured response.
+    if snapshot.provenance.tool not in {"Ensembl VEP REST", "Ensembl VEP historical output"}:
+        return
+    expected = snapshot_from_record(source, snapshot.annotation.transcript_id, "verify")
+    if snapshot.variant != expected.variant or snapshot.annotation != expected.annotation or snapshot.variant_records:
+        raise ValueError("VEP snapshot does not match its preserved source variant and annotation")
+    expected_rows = {row.transcript_id: row for row in expected.annotations}
+    if any(expected_rows.get(row.transcript_id) != row for row in snapshot.annotations):
+        raise ValueError("VEP snapshot annotation rows contradict the preserved source")
+    if (snapshot.provenance.configuration.get("source_annotation_scope") == "all_transcripts" and
+            {row.transcript_id for row in snapshot.annotations} != set(expected_rows)):
+        raise ValueError("VEP snapshot is missing rows from its declared complete source annotation set")
+    for key in ("tool", "tool_version", "source_name", "source_release", "source_uri"):
+        actual = getattr(snapshot.provenance, key)
+        legacy_release = (key == "source_release" and source.origin == "current_api" and
+            "source_annotation_scope" not in snapshot.provenance.configuration and
+            actual == "Ensembl " + ",".join(str(value) for value in source.releases))
+        if actual != getattr(expected.provenance, key) and not legacy_release:
+            raise ValueError("VEP snapshot provenance contradicts its preserved source")

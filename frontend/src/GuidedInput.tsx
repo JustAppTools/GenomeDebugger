@@ -87,7 +87,7 @@ export function validateGuidedInput(value: unknown): string[] {
   const input = normalized as InvestigationInput
   function text(value: string, max: number, path: string) {
     if (!value.trim()) errors.push(`${path} is required`)
-    else if (value.length > max) errors.push(`${path} exceeds ${max} characters`)
+    else if (Array.from(value).length > max) errors.push(`${path} exceeds ${max} characters`)
   }
   function variant(v: Variant, path: string) {
     text(v.assembly,50,`${path}: assembly`);text(v.sequence_id,100,`${path}: sequence accession`)

@@ -221,6 +221,8 @@ def test_immutable_artifact_conflicts_never_replace_existing_bytes(tmp_path,kind
     else:
         captured=json.loads((FIXTURE.parent/'ncbi-repeat-deletion-observation.json').read_text(encoding='utf-8'))
         artifact=AlleleCheck.model_validate(captured['check']);writer=storage.save_allele_check
+        parent=compare(InvestigationInput.model_validate(captured['input']))
+        storage.save(path,parent.model_copy(update={'id':artifact.investigation_id}))
         changed=artifact.model_copy(update={'checked_at':'changed'})
         loader=lambda path,_:storage.latest_allele_check(path,artifact.investigation_id)
     writer(path,artifact)

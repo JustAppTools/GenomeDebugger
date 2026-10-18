@@ -14,13 +14,14 @@ from .engine import canonical_json, compare, digest
 from .legacy_engine_v050 import compare as compare_v050
 from .legacy_engine_v060 import compare as compare_v060
 from .legacy_engine_v061 import compare as compare_v061
-from .check_scope import validate_check_variants
+from .legacy_engine_v062 import compare as compare_v062
+from .check_scope import validate_check_variants, validate_annotation_origin
 from .limits import MAX_BUNDLE_BYTES
 from .version import ENGINE_VERSION
 from .allele_check import AlleleCheck, replay_allele_check
 from .historical import HistoricalImport, import_historical
 from .models import InvestigationResult
-from .ensembl import SourceRecord, TranscriptConsequence, snapshot_from_record
+from .ensembl import SourceRecord, parse_transcripts, validate_source_snapshot
 from .ncbi import ReferenceCheck, ReferenceCheckError, replay_reference_check
 from .snpeff import SnpEffCheck, SnpEffCheckRequest, compare_snpeff
 from .snpeff_databases import validate_database
@@ -37,29 +38,6 @@ class BundleManifest(StrictModel):
     sha256: dict[str, str]
     exported_at: str | None = None
     replayed_from_id: str | None = None
-
-
-def _verify_source_snapshot(source, snapshot):
-    # Custom tools may cite the response as an input. A VEP-generated snapshot
-    # claims that its outputs were derived directly from this captured response.
-    if snapshot.provenance.tool not in {"Ensembl VEP REST", "Ensembl VEP historical output"}:
-        return
-    expected = snapshot_from_record(source, snapshot.annotation.transcript_id, "verify")
-    if snapshot.variant != expected.variant or snapshot.annotation != expected.annotation or snapshot.variant_records:
-        raise ValueError("VEP snapshot does not match its preserved source variant and annotation")
-    expected_rows = {row.transcript_id: row for row in expected.annotations}
-    if any(expected_rows.get(row.transcript_id) != row for row in snapshot.annotations):
-        raise ValueError("VEP snapshot annotation rows contradict the preserved source")
-    if (snapshot.provenance.configuration.get("source_annotation_scope") == "all_transcripts" and
-            {row.transcript_id for row in snapshot.annotations} != set(expected_rows)):
-        raise ValueError("VEP snapshot is missing rows from its declared complete source annotation set")
-    for key in ("tool", "tool_version", "source_name", "source_release", "source_uri"):
-        actual = getattr(snapshot.provenance, key)
-        legacy_release = (key == "source_release" and source.origin == "current_api" and
-            "source_annotation_scope" not in snapshot.provenance.configuration and
-            actual == "Ensembl " + ",".join(str(value) for value in source.releases))
-        if actual != getattr(expected.provenance, key) and not legacy_release:
-            raise ValueError("VEP snapshot provenance contradicts its preserved source")
 
 
 def _verify_source(source: SourceRecord) -> None:
@@ -86,10 +64,7 @@ def _verify_source(source: SourceRecord) -> None:
     rows = item.get("transcript_consequences")
     if not isinstance(rows, list):
         raise ValueError("Bundle source response has no transcript rows")
-    derived = [TranscriptConsequence(transcript_id=row["transcript_id"], gene_id=row["gene_id"],
-               consequence_terms=row["consequence_terms"], protein_consequence=row.get("hgvsp"),
-               biotype=row.get("biotype")) for row in rows if isinstance(row, dict) and
-               row.get("transcript_id") and row.get("gene_id") and isinstance(row.get("consequence_terms"), list) and row["consequence_terms"]]
+    derived = parse_transcripts(rows)
     if derived != source.transcripts:
         raise ValueError("Bundle transcript rows do not match the preserved response")
     expected_id = hashlib.sha256(json.dumps({"query": query.model_dump(), "release": source.releases,
@@ -183,7 +158,7 @@ def create_bundle(db_path, result: InvestigationResult) -> dict:
 def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord], ReferenceCheck | None, SnpEffCheck | None, AlleleCheck | None]:
     BundleManifest.model_validate(bundle, strict=True)
     if (bundle.get("format") != "GenomeDebugger bundle" or bundle.get("version") != BUNDLE_VERSION or
-            bundle.get("engine_version") not in {"0.5.0", "0.6.0", "0.6.1", ENGINE_VERSION}):
+            bundle.get("engine_version") not in {"0.5.0", "0.6.0", "0.6.1", "0.6.2", ENGINE_VERSION}):
         raise ValueError("Unsupported bundle format or version")
     entries, hashes = bundle.get("entries"), bundle.get("sha256")
     allowed = {"investigation", "source_record", "source_records", "reference_check", "snpeff_check", "allele_check"}
@@ -194,7 +169,7 @@ def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord]
         if digest(value) != hashes[name]:
             raise ValueError(f"Bundle entry {name} failed its SHA-256 check")
     result = InvestigationResult.model_validate(entries["investigation"])
-    rules = {"0.5.0": compare_v050, "0.6.0": compare_v060, "0.6.1": compare_v061,
+    rules = {"0.5.0": compare_v050, "0.6.0": compare_v060, "0.6.1": compare_v061, "0.6.2": compare_v062,
              ENGINE_VERSION: compare}[bundle["engine_version"]]
     if result.engine_version != bundle["engine_version"] or result != rules(result.input):
         raise ValueError("Investigation result does not match a replay of its declared engine version")
@@ -233,7 +208,7 @@ def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord]
     for snapshot in result.input.snapshots:
         source_id = snapshot.provenance.configuration.get("source_record_id")
         if source_id:
-            _verify_source_snapshot(source_map[source_id], snapshot)
+            validate_source_snapshot(source_map[source_id], snapshot)
     if check and (check.source_record_id not in source_map or
                   not result.input.reference_check or check.id != result.input.reference_check.id):
         raise ValueError("Bundle reference check does not match its source or investigation")
@@ -264,6 +239,7 @@ def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord]
     if snpeff and not annotation_summary:
         raise ValueError("Bundle includes a SnpEff check not linked by the investigation")
     if snpeff:
+        validate_annotation_origin(result.input, snpeff)
         validate_check_variants(result.input, source_map[snpeff.source_record_id], "SnpEff annotation")
         _verify_snpeff(source_map[snpeff.source_record_id], snpeff)
     return result, sources, check, snpeff, allele_check

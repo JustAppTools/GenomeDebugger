@@ -21,7 +21,9 @@ from .storage import list_items, load, save, save_case, load_case, list_cases, s
 from .storage import save_allele_check, latest_allele_check
 from .storage import list_source_records, save_bundle_records
 from .storage import load_snpeff_check
-from .check_scope import validate_check_variants
+from .storage import RecordMissingError
+from .check_scope import validate_check_variants, validate_annotation_origin
+from .ensembl import validate_source_snapshot
 
 BASE = Path(__file__).resolve().parents[2]
 DEMO = BASE / "fixtures" / "transcript-switch.json"
@@ -31,6 +33,16 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http
 
 
 def validate_linked_checks(payload: InvestigationInput):
+    for snapshot in payload.snapshots:
+        source_id = snapshot.provenance.configuration.get("source_record_id")
+        if source_id:
+            source = load_source_record(DB, source_id)
+            if source is None or snapshot.provenance.input_sha256 != source.source_response_sha256:
+                raise ValueError("Snapshot requires its preserved source record and matching response hash")
+            try:
+                validate_source_snapshot(source, snapshot)
+            except ValueError as exc:
+                raise ValueError(f"{exc}. Restore the source output or identify transformed output as a custom tool.") from exc
     for label, summary, loader in (("NCBI reference", payload.reference_check, load_reference_check),
                                    ("SnpEff annotation", payload.annotation_check, load_snpeff_check)):
         if summary is None:
@@ -43,6 +55,7 @@ def validate_linked_checks(payload: InvestigationInput):
         observed = check.model_dump(include=fields)
         if isinstance(summary, AnnotationCheckSummary):
             observed["matched_transcripts"] = len(check.matches)
+            validate_annotation_origin(payload, check)
         if type(summary).model_validate(observed) != summary or source.source_response_sha256 != summary.source_response_sha256:
             raise ValueError(f"{label} summary does not match its preserved check")
         validate_check_variants(payload, source, label)
@@ -56,6 +69,11 @@ async def storage_limit_error(_request: Request, exc: StorageLimitError):
 @app.exception_handler(RecordConflictError)
 async def record_conflict_error(_request: Request, exc: RecordConflictError):
     return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(RecordMissingError)
+async def record_missing_error(_request: Request, exc: RecordMissingError):
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @app.middleware("http")
@@ -347,7 +365,8 @@ def report(id_: str):
     result = load(DB, id_)
     if result is None:
         raise HTTPException(status_code=404, detail="Investigation not found")
-    return markdown_report(result,latest_allele_check(DB,result.id))
+    annotation = load_snpeff_check(DB, result.input.annotation_check.id) if result.input.annotation_check else None
+    return markdown_report(result, latest_allele_check(DB,result.id), annotation)
 
 
 @app.post("/api/investigations/{id_}/regression-cases", response_model=RegressionCase)

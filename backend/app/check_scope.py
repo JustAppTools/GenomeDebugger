@@ -5,6 +5,14 @@ from .models import InvestigationInput
 from .ncbi import _manifest
 
 
+def validate_annotation_origin(payload: InvestigationInput, check) -> None:
+    expected = "local_execution" if check.execution is not None else "user_supplied"
+    for snapshot in payload.snapshots:
+        origin = snapshot.provenance.configuration.get("annotation_check_origin")
+        if origin is not None and origin != expected:
+            raise ValueError("SnpEff execution origin contradicts the preserved check record")
+
+
 def validate_check_variants(payload: InvestigationInput, source: SourceRecord, label: str) -> None:
     query = source.query
     assemblies = {"GRCh38", source.assembly_accession}

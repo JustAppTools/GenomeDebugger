@@ -19,6 +19,10 @@ class RecordConflictError(Exception):
     pass
 
 
+class RecordMissingError(Exception):
+    pass
+
+
 @contextmanager
 def _connection(path: Path):
     db = sqlite3.connect(path)
@@ -105,6 +109,18 @@ def _save_records(path: Path, records):
     initialize(path)
     with _connection(path) as db:
         db.execute("BEGIN IMMEDIATE")
+        parents = {record.id: record for record in records if isinstance(record, InvestigationResult)}
+        for record in records:
+            if isinstance(record, AlleleCheck):
+                parent = parents.get(record.investigation_id)
+                if parent is None:
+                    row = db.execute("SELECT result_json FROM investigations WHERE id = ?",
+                                     (record.investigation_id,)).fetchone()
+                    if row is None:
+                        raise RecordMissingError("Investigation no longer exists; allele check was not saved")
+                    parent = InvestigationResult.model_validate_json(row[0])
+                if parent.input_sha256 != record.input_sha256:
+                    raise RecordConflictError("Allele check input hash does not match its investigation")
         pending = []
         for record in records:
             table, column, model, values = _record_entry(record)
