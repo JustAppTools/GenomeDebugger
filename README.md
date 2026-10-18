@@ -1,6 +1,12 @@
 # GenomeDebugger
 
-GenomeDebugger is a local, research-oriented workstation for comparing two genomic analysis snapshots and tracing why their results differ. Version 0.6.3 fixes the six findings in the [0.6.2 audit](docs/bug-audit-0.6.2-2026-10-18.md): execution provenance, malformed source rows, source validation before saving, deletion races, transcript-selection freshness, and Unicode limits. Guided multi-variant editing, NCBI allele checks, pinned SnpEff execution, and historical VEP imports remain available. The synthetic transcript-selection investigation and regression workflow remain available offline. The tool does **not** assign clinical pathogenicity.
+GenomeDebugger is a local, research-oriented workstation for comparing two genomic analysis snapshots and tracing why their results differ. Version 0.7.0 adds the **Mystery Lab**: three playable synthetic cases, evidence-linked hypothesis checks, browser progress, and a replay that walks through a recorded comparison. Guided multi-variant editing, NCBI allele checks, pinned SnpEff execution, and historical VEP imports remain available. The tool does **not** assign clinical pathogenicity. Comparator engine 0.6.3 remains unchanged, preserving existing saved-result identities and replay rules.
+
+## Play a mystery
+
+Open **Mystery lab** in the sidebar, or choose **Explore the Mystery Lab** on the welcome screen. Inspect a case, step through its evidence, choose a hypothesis, and check your conclusion. Wrong turns can be retried freely; acknowledging an unresolved cause completes the third case. Practice uses the local engine and does not save investigations. **Open & save investigation** explicitly moves a case into the regular workbench for export or regression testing.
+
+The cases are **The Vanishing Transcript**, **Same Variant, Different Disguise**, and **The Database Time Machine**. Their data and annotations are fabricated. Replay also appears on ordinary investigation overviews, with play/pause, stepping, evidence links, and an automatic pause at the first observed difference. It illustrates recorded data rather than executing an annotation pipeline. See [Mystery Lab details](docs/mystery-lab.md).
 
 ## Start on Windows
 

@@ -24,11 +24,13 @@ from .storage import load_snpeff_check
 from .storage import RecordMissingError
 from .check_scope import validate_check_variants, validate_annotation_origin
 from .ensembl import validate_source_snapshot
+from .mysteries import MISSIONS, MysteryChoice, mission, replay as replay_mystery, assess
+from .version import APP_VERSION
 
 BASE = Path(__file__).resolve().parents[2]
 DEMO = BASE / "fixtures" / "transcript-switch.json"
 DB = Path(os.environ.get("GENOMEDEBUGGER_DB", str(BASE / "data" / "investigations.db")))
-app = FastAPI(title="GenomeDebugger", version=ENGINE_VERSION, description="Local genomic discrepancy investigation with preserved VEP sources, NCBI allele checks, and optional pinned local SnpEff execution")
+app = FastAPI(title="GenomeDebugger", version=APP_VERSION, description="Local genomic discrepancy investigation with synthetic mysteries, preserved sources, and optional independent checks")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type"])
 
 
@@ -111,7 +113,7 @@ def health():
         initialize(DB)
     except (OSError, sqlite3.Error) as exc:
         raise HTTPException(status_code=503, detail="Local database unavailable") from exc
-    return {"status": "ok", "version": ENGINE_VERSION,
+    return {"status": "ok", "version": ENGINE_VERSION, "app_version":APP_VERSION,
             "limits": {"input_bytes": MAX_INPUT_BYTES, "bundle_bytes": MAX_BUNDLE_BYTES}}
 
 
@@ -275,6 +277,32 @@ def compare_ensembl_transcripts(id_: str, payload: CompareTranscripts):
 @app.get("/api/demos/transcript-switch", response_model=InvestigationInput)
 def demo():
     return InvestigationInput.model_validate_json(DEMO.read_text(encoding="utf-8"))
+
+
+@app.get('/api/mysteries')
+def mysteries():
+    return MISSIONS
+
+
+@app.get('/api/mysteries/{id_}')
+def mystery_detail(id_: str):
+    try:
+        return {'mission':mission(id_), 'result':replay_mystery(id_)}
+    except StopIteration as exc:
+        raise HTTPException(status_code=404, detail='Mystery not found') from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post('/api/mysteries/{id_}/check')
+def check_mystery(id_: str, payload: MysteryChoice):
+    try:
+        result = replay_mystery(id_)
+        return {'assessment':assess(id_, payload.hypothesis_id, result), 'result':result}
+    except StopIteration as exc:
+        raise HTTPException(status_code=404, detail='Mystery not found') from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/investigations", response_model=InvestigationResult)
