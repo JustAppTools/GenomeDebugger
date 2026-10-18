@@ -57,6 +57,8 @@ class SourceRecord(StrictModel):
     source_response_sha256: str
     source_response: dict
     transcripts: list[TranscriptConsequence]
+    origin: Literal["current_api", "historical_artifact"] = "current_api"
+    artifact: dict | None = None
 
 
 class SourceLookupResult(StrictModel):
@@ -157,16 +159,17 @@ def fetch_record(query: SourceQuery, client: httpx.Client | None = None) -> Sour
             client.close()
 
 
-def comparison_input(record: SourceRecord, selection: CompareTranscripts,
-                     reference_check: ReferenceCheckSummary | None = None,
-                     annotation_check: AnnotationCheckSummary | None = None) -> InvestigationInput:
+def snapshot_from_record(record: SourceRecord, transcript_id: str, side: str,
+                         reference_check: ReferenceCheckSummary | None = None,
+                         annotation_check: AnnotationCheckSummary | None = None) -> Snapshot:
     rows = {row.transcript_id: row for row in record.transcripts}
-    if selection.transcript_a not in rows or selection.transcript_b not in rows:
+    if transcript_id not in rows:
         raise ValueError("selected transcript was not present in the cached record")
     q = record.query
     variant = Variant(assembly="GRCh38", sequence_id=q.chromosome, position=q.position,
-                      ref=q.ref, alt=q.alt, reference_context=ReferenceContext(start=q.position, sequence=record.reference_base))
-    source_release = "reported " + ",".join(str(x) for x in record.releases)
+                      ref=q.ref, alt=q.alt, reference_context=(ReferenceContext(start=q.position, sequence=record.reference_base)
+                          if record.origin == "current_api" else None))
+    source_release = ("reported " if record.origin == "current_api" else "declared historical ") + ",".join(str(x) for x in record.releases)
     configuration = {"assembly_accession": record.assembly_accession,
                      "source_record_id": record.id, "retrieved_at": record.retrieved_at}
     if reference_check:
@@ -175,22 +178,33 @@ def comparison_input(record: SourceRecord, selection: CompareTranscripts,
     if annotation_check:
         configuration.update({"annotation_check_id": annotation_check.id,
                               "annotation_check_status": annotation_check.status})
-    provenance = Provenance(tool="Ensembl VEP REST", tool_version="not reported by API",
+    if record.origin == "historical_artifact":
+        configuration.update({"source_origin":record.origin,"artifact_sha256":record.artifact["sha256"],
+                              "generated_at":record.artifact["generated_at"]})
+    provenance = Provenance(tool="Ensembl VEP REST" if record.origin == "current_api" else "Ensembl VEP historical output",
+                            tool_version="not reported by API" if record.origin == "current_api" else record.artifact["tool_version"],
                             source_name="Ensembl", source_release=source_release,
                             source_uri=record.source_uri, input_sha256=record.source_response_sha256,
                             configuration=configuration)
-    snapshots = []
-    for side, transcript_id in (("a", selection.transcript_a), ("b", selection.transcript_b)):
-        row = rows[transcript_id]
-        other_rows = [Annotation(gene_id=other.gene_id, transcript_id=other.transcript_id,
+    row = rows[transcript_id]
+    other_rows = [Annotation(gene_id=other.gene_id, transcript_id=other.transcript_id,
                                  consequence=";".join(other.consequence_terms),
                                  protein_consequence=other.protein_consequence)
                       for other in record.transcripts if other.transcript_id != transcript_id]
-        snapshots.append(Snapshot(id=f"{record.id}-{side}", label=f"Ensembl VEP {transcript_id}",
+    return Snapshot(id=f"{record.id}-{side}", label=f"Ensembl VEP {transcript_id}",
                                   variant=variant, annotation=Annotation(gene_id=row.gene_id,
                                   transcript_id=row.transcript_id, consequence=";".join(row.consequence_terms),
                                   protein_consequence=row.protein_consequence), annotations=other_rows,
-                                  provenance=provenance))
-    return InvestigationInput(title=f"Current Ensembl transcript comparison: {q.chromosome}:{q.position} {q.ref}>{q.alt}",
+                                  provenance=provenance)
+
+
+def comparison_input(record: SourceRecord, selection: CompareTranscripts,
+                     reference_check: ReferenceCheckSummary | None = None,
+                     annotation_check: AnnotationCheckSummary | None = None) -> InvestigationInput:
+    snapshots = [snapshot_from_record(record,transcript,side,reference_check,annotation_check)
+                 for side,transcript in (("a",selection.transcript_a),("b",selection.transcript_b))]
+    q = record.query
+    label = "Current" if record.origin == "current_api" else "Historical artifact"
+    return InvestigationInput(title=f"{label} Ensembl transcript comparison: {q.chromosome}:{q.position} {q.ref}>{q.alt}",
                               synthetic=False, snapshots=snapshots, reference_check=reference_check,
                               annotation_check=annotation_check)

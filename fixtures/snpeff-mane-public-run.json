@@ -1,0 +1,533 @@
+{
+  "source": {
+    "id": "e5a62303dbd17832682b",
+    "query": {
+      "chromosome": "1",
+      "position": 6524705,
+      "ref": "C",
+      "alt": "T"
+    },
+    "retrieved_at": "2026-10-12T02:01:22.093752+00:00",
+    "source_uri": "https://rest.ensembl.org/vep/human/region/1:6524705-6524705:1/T?content-type=application/json",
+    "sequence_uri": "https://rest.ensembl.org/sequence/region/human/1:6524705..6524705:1?content-type=application/json",
+    "release_uri": "https://rest.ensembl.org/info/data?content-type=application/json",
+    "assembly_uri": "https://rest.ensembl.org/info/assembly/human?content-type=application/json",
+    "releases": [
+      116
+    ],
+    "assembly_name": "GRCh38.p14",
+    "assembly_accession": "GCA_000001405.29",
+    "reference_base": "C",
+    "source_response_sha256": "66660c0d9cdeac58972a9313b1e32b1b811eb233776751cafad8efd2876175a3",
+    "source_response": {
+      "end": 6524705,
+      "start": 6524705,
+      "input": "1 6524705 6524705 C/T 1",
+      "id": "1_6524705_C/T",
+      "allele_string": "C/T",
+      "transcript_consequences": [
+        {
+          "variant_allele": "T",
+          "consequence_terms": [
+            "3_prime_UTR_variant"
+          ],
+          "hgnc_id": "HGNC:26265",
+          "cdna_start": 3269,
+          "gene_symbol_source": "HGNC",
+          "gene_id": "ENSG00000162408",
+          "gene_symbol": "NOL9",
+          "biotype": "protein_coding",
+          "cdna_end": 3269,
+          "impact": "MODIFIER",
+          "transcript_id": "ENST00000377705",
+          "strand": -1
+        },
+        {
+          "strand": -1,
+          "transcript_id": "ENST00000377740",
+          "impact": "MODIFIER",
+          "biotype": "protein_coding",
+          "gene_id": "ENSG00000171680",
+          "gene_symbol": "PLEKHG5",
+          "gene_symbol_source": "HGNC",
+          "hgnc_id": "HGNC:29105",
+          "distance": 4696,
+          "consequence_terms": [
+            "upstream_gene_variant"
+          ],
+          "variant_allele": "T"
+        },
+        {
+          "consequence_terms": [
+            "upstream_gene_variant"
+          ],
+          "variant_allele": "T",
+          "flags": [
+            "cds_end_NF"
+          ],
+          "hgnc_id": "HGNC:29105",
+          "distance": 4631,
+          "gene_id": "ENSG00000171680",
+          "gene_symbol": "PLEKHG5",
+          "gene_symbol_source": "HGNC",
+          "strand": -1,
+          "transcript_id": "ENST00000675812",
+          "impact": "MODIFIER",
+          "biotype": "protein_coding"
+        },
+        {
+          "consequence_terms": [
+            "3_prime_UTR_variant"
+          ],
+          "variant_allele": "T",
+          "hgnc_id": "HGNC:26265",
+          "cdna_start": 3373,
+          "gene_symbol": "NOL9",
+          "gene_id": "ENSG00000162408",
+          "gene_symbol_source": "HGNC",
+          "impact": "MODIFIER",
+          "cdna_end": 3373,
+          "biotype": "protein_coding",
+          "strand": -1,
+          "transcript_id": "ENST00000870262"
+        },
+        {
+          "transcript_id": "ENST00000870263",
+          "strand": -1,
+          "biotype": "protein_coding",
+          "cdna_end": 3289,
+          "impact": "MODIFIER",
+          "gene_symbol_source": "HGNC",
+          "gene_symbol": "NOL9",
+          "gene_id": "ENSG00000162408",
+          "cdna_start": 3289,
+          "hgnc_id": "HGNC:26265",
+          "variant_allele": "T",
+          "consequence_terms": [
+            "3_prime_UTR_variant"
+          ]
+        },
+        {
+          "consequence_terms": [
+            "3_prime_UTR_variant"
+          ],
+          "variant_allele": "T",
+          "hgnc_id": "HGNC:26265",
+          "cdna_start": 2833,
+          "gene_id": "ENSG00000162408",
+          "gene_symbol": "NOL9",
+          "gene_symbol_source": "HGNC",
+          "cdna_end": 2833,
+          "impact": "MODIFIER",
+          "biotype": "protein_coding",
+          "strand": -1,
+          "transcript_id": "ENST00000870264"
+        },
+        {
+          "cdna_end": 3328,
+          "impact": "MODIFIER",
+          "biotype": "protein_coding",
+          "strand": -1,
+          "transcript_id": "ENST00000870265",
+          "cdna_start": 3328,
+          "gene_id": "ENSG00000162408",
+          "gene_symbol": "NOL9",
+          "gene_symbol_source": "HGNC",
+          "hgnc_id": "HGNC:26265",
+          "consequence_terms": [
+            "3_prime_UTR_variant"
+          ],
+          "variant_allele": "T"
+        },
+        {
+          "hgnc_id": "HGNC:26265",
+          "consequence_terms": [
+            "3_prime_UTR_variant"
+          ],
+          "variant_allele": "T",
+          "cdna_end": 3283,
+          "impact": "MODIFIER",
+          "biotype": "protein_coding",
+          "strand": -1,
+          "transcript_id": "ENST00000925477",
+          "cdna_start": 3283,
+          "gene_id": "ENSG00000162408",
+          "gene_symbol": "NOL9",
+          "gene_symbol_source": "HGNC"
+        },
+        {
+          "gene_symbol_source": "HGNC",
+          "gene_id": "ENSG00000162408",
+          "gene_symbol": "NOL9",
+          "cdna_start": 3046,
+          "transcript_id": "ENST00000925478",
+          "strand": -1,
+          "biotype": "protein_coding",
+          "cdna_end": 3046,
+          "impact": "MODIFIER",
+          "variant_allele": "T",
+          "consequence_terms": [
+            "3_prime_UTR_variant"
+          ],
+          "hgnc_id": "HGNC:26265"
+        },
+        {
+          "gene_symbol_source": "HGNC",
+          "gene_id": "ENSG00000171680",
+          "gene_symbol": "PLEKHG5",
+          "biotype": "protein_coding",
+          "impact": "MODIFIER",
+          "transcript_id": "ENST00000934259",
+          "strand": -1,
+          "variant_allele": "T",
+          "consequence_terms": [
+            "upstream_gene_variant"
+          ],
+          "distance": 4703,
+          "hgnc_id": "HGNC:29105"
+        },
+        {
+          "biotype": "protein_coding",
+          "impact": "MODIFIER",
+          "transcript_id": "ENST00000948663",
+          "strand": -1,
+          "gene_symbol_source": "HGNC",
+          "gene_symbol": "PLEKHG5",
+          "gene_id": "ENSG00000171680",
+          "distance": 4637,
+          "hgnc_id": "HGNC:29105",
+          "variant_allele": "T",
+          "consequence_terms": [
+            "upstream_gene_variant"
+          ]
+        },
+        {
+          "impact": "MODIFIER",
+          "biotype": "nonsense_mediated_decay",
+          "strand": -1,
+          "transcript_id": "ENST00001008552",
+          "gene_symbol": "NOL9",
+          "gene_id": "ENSG00000162408",
+          "gene_symbol_source": "HGNC",
+          "distance": 40,
+          "hgnc_id": "HGNC:26265",
+          "consequence_terms": [
+            "downstream_gene_variant"
+          ],
+          "variant_allele": "T"
+        },
+        {
+          "variant_allele": "T",
+          "consequence_terms": [
+            "downstream_gene_variant"
+          ],
+          "distance": 211,
+          "hgnc_id": "HGNC:26265",
+          "gene_symbol_source": "HGNC",
+          "gene_id": "ENSG00000162408",
+          "gene_symbol": "NOL9",
+          "biotype": "nonsense_mediated_decay",
+          "impact": "MODIFIER",
+          "transcript_id": "ENST00001008553",
+          "strand": -1
+        },
+        {
+          "distance": 966,
+          "hgnc_id": "HGNC:26265",
+          "consequence_terms": [
+            "downstream_gene_variant"
+          ],
+          "variant_allele": "T",
+          "impact": "MODIFIER",
+          "biotype": "nonsense_mediated_decay",
+          "strand": -1,
+          "transcript_id": "ENST00001008554",
+          "gene_id": "ENSG00000162408",
+          "gene_symbol": "NOL9",
+          "gene_symbol_source": "HGNC"
+        },
+        {
+          "impact": "MODIFIER",
+          "biotype": "nonsense_mediated_decay",
+          "strand": -1,
+          "transcript_id": "ENST00001065564",
+          "gene_symbol": "NOL9",
+          "gene_id": "ENSG00000162408",
+          "gene_symbol_source": "HGNC",
+          "distance": 440,
+          "hgnc_id": "HGNC:26265",
+          "consequence_terms": [
+            "downstream_gene_variant"
+          ],
+          "variant_allele": "T"
+        },
+        {
+          "gene_symbol": "NOL9",
+          "gene_id": "ENSG00000162408",
+          "gene_symbol_source": "HGNC",
+          "cdna_start": 3292,
+          "strand": -1,
+          "transcript_id": "ENST00001145126",
+          "impact": "MODIFIER",
+          "cdna_end": 3292,
+          "biotype": "protein_coding",
+          "consequence_terms": [
+            "3_prime_UTR_variant"
+          ],
+          "variant_allele": "T",
+          "hgnc_id": "HGNC:26265"
+        }
+      ],
+      "seq_region_name": "1",
+      "strand": 1,
+      "assembly_name": "GRCh38",
+      "most_severe_consequence": "3_prime_UTR_variant"
+    },
+    "transcripts": [
+      {
+        "transcript_id": "ENST00000377705",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "3_prime_UTR_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000377740",
+        "gene_id": "ENSG00000171680",
+        "consequence_terms": [
+          "upstream_gene_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000675812",
+        "gene_id": "ENSG00000171680",
+        "consequence_terms": [
+          "upstream_gene_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000870262",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "3_prime_UTR_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000870263",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "3_prime_UTR_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000870264",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "3_prime_UTR_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000870265",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "3_prime_UTR_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000925477",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "3_prime_UTR_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000925478",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "3_prime_UTR_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000934259",
+        "gene_id": "ENSG00000171680",
+        "consequence_terms": [
+          "upstream_gene_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00000948663",
+        "gene_id": "ENSG00000171680",
+        "consequence_terms": [
+          "upstream_gene_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      },
+      {
+        "transcript_id": "ENST00001008552",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "downstream_gene_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "nonsense_mediated_decay"
+      },
+      {
+        "transcript_id": "ENST00001008553",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "downstream_gene_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "nonsense_mediated_decay"
+      },
+      {
+        "transcript_id": "ENST00001008554",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "downstream_gene_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "nonsense_mediated_decay"
+      },
+      {
+        "transcript_id": "ENST00001065564",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "downstream_gene_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "nonsense_mediated_decay"
+      },
+      {
+        "transcript_id": "ENST00001145126",
+        "gene_id": "ENSG00000162408",
+        "consequence_terms": [
+          "3_prime_UTR_variant"
+        ],
+        "protein_consequence": null,
+        "biotype": "protein_coding"
+      }
+    ],
+    "origin": "current_api",
+    "artifact": null
+  },
+  "check": {
+    "id": "941d4a24b86ce61a6fd2",
+    "source_record_id": "e5a62303dbd17832682b",
+    "source_response_sha256": "66660c0d9cdeac58972a9313b1e32b1b811eb233776751cafad8efd2876175a3",
+    "checked_at": "2026-10-18T02:11:11.388252+00:00",
+    "snpeff_version": "SnpEff\t5.4c\t2026-02-23",
+    "genome_database": "GRCh38.mane.1.0.ensembl",
+    "database_sha256": "0b231feb4ae6179549224335df06ef54556db181791a12819e9db20ac309c5e1",
+    "vcf_sha256": "b7a71562f15cf0ba4722c0ece8ebef607dcb4e233c32fe215734dc56adb3c994",
+    "vcf_text": "##fileformat=VCFv4.2\n##SnpEffVersion=\"5.4c (build 2026-02-23 07:25), by Pablo Cingolani\"\n##SnpEffCmd=\"SnpEff  -noStats GRCh38.mane.1.0.ensembl C:/Users/vicsp/AppData/Local/Temp/genomedebugger-snpeff-kdhne7_5/input.vcf \"\n##INFO=<ID=ANN,Number=.,Type=String,Description=\"Functional annotations: 'Allele | Annotation | Annotation_Impact | Gene_Name | Gene_ID | Feature_Type | Feature_ID | Transcript_BioType | Rank | HGVS.c | HGVS.p | cDNA.pos / cDNA.length | CDS.pos / CDS.length | AA.pos / AA.length | Distance | ERRORS / WARNINGS / INFO' \">\n##INFO=<ID=LOF,Number=.,Type=String,Description=\"Predicted loss of function effects for this variant. Format: 'Gene_Name | Gene_ID | Number_of_transcripts_in_gene | Percent_of_transcripts_affected'\">\n##INFO=<ID=NMD,Number=.,Type=String,Description=\"Predicted nonsense mediated decay effects for this variant. Format: 'Gene_Name | Gene_ID | Number_of_transcripts_in_gene | Percent_of_transcripts_affected'\">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n1\t6524705\t.\tC\tT\t.\tPASS\tANN=T|3_prime_UTR_variant|MODIFIER|NOL9|ENSG00000162408.11|transcript|ENST00000377705.6|protein_coding|12/12|c.*1149G>A|||||1149|\n",
+    "status": "unresolved",
+    "matches": [],
+    "unmatched_ensembl": [
+      "ENST00000377705",
+      "ENST00000377740",
+      "ENST00000675812",
+      "ENST00000870262",
+      "ENST00000870263",
+      "ENST00000870264",
+      "ENST00000870265",
+      "ENST00000925477",
+      "ENST00000925478",
+      "ENST00000934259",
+      "ENST00000948663",
+      "ENST00001008552",
+      "ENST00001008553",
+      "ENST00001008554",
+      "ENST00001065564",
+      "ENST00001145126"
+    ],
+    "unmatched_snpeff": [
+      "ENST00000377705.6"
+    ],
+    "explanation": "No exact transcript IDs matched; transcript releases may differ.",
+    "execution": {
+      "started_at": "2026-10-18T02:11:03.556176+00:00",
+      "elapsed_seconds": 7.828,
+      "command": [
+        "D:\\Creation\\GenomeDebugger\\tools\\snpeff\\java\\jdk-21.0.12.1+1-jre\\bin\\java.exe",
+        "-Xmx4g",
+        "-jar",
+        "D:/Creation/GenomeDebugger/tools/snpeff/snpEff/snpEff.jar",
+        "ann",
+        "-c",
+        "D:/Creation/GenomeDebugger/tools/snpeff/snpEff/snpEff.config",
+        "-dataDir",
+        "data",
+        "-noLog",
+        "-nodownload",
+        "-noStats",
+        "GRCh38.mane.1.0.ensembl",
+        "C:/Users/vicsp/AppData/Local/Temp/genomedebugger-snpeff-kdhne7_5/input.vcf"
+      ],
+      "java_sha256": "82051fdab26319d77d20cc0065045d05ec00b3e3d05f44935d7c06b96b621d55",
+      "jar_sha256": "5e8f75cbf908a33c6fb2e65c81e66fe31236cb21bb0195541c4703d8202c22b3",
+      "config_sha256": "777768cee885c91c7396ca716c03abb254ef4cde129de2a10513e2844895df5a",
+      "database_files": {
+        "sequence.1.bin": "8a25d065e5af62cd50150a7c08f89e0c943169c7536488f383ec2cecaeb78d81",
+        "sequence.10.bin": "ee5a276cd4feda3b2e583c6b18793f4275dc4cda692288c220ca305bd0369934",
+        "sequence.11.bin": "a501b0d13cf68decb7814394859f02e8a11aa09d05edabbba6aeee24cc65d0b0",
+        "sequence.12.bin": "231f4af128f05eb790056c82897aa497710964380006528eb877a77fb26d207b",
+        "sequence.13.bin": "7db948e8af1cf59236ec62fc500b7efc3a98375cfc0b16bdf08a253ce4921f07",
+        "sequence.14.bin": "cf8d85ef764f7dba5c564999080f0c675b2400ae284de90c71d4a115fe450116",
+        "sequence.15.bin": "19449621766c0d9e58796621a3266aad3f0b329a48ebbdc29dc12fe938e0adfb",
+        "sequence.16.bin": "43c32d13cc7a8eeef00c8667f05f8bb396908e5c356f2898c3fc1d2aaccd674b",
+        "sequence.17.bin": "2e1830a725105128c8d29bc61e3cc68fc153deb0176014b0e502482677630607",
+        "sequence.18.bin": "346f952f79705a171ae1576ee7e9b967dcd69c624eb09a3e6fc4d2f08c58387b",
+        "sequence.19.bin": "e61223e5eb32d59e22ea019a859dc78a7d133aa263b0ca541bb6e1f0696d0716",
+        "sequence.2.bin": "6cf04d0d8240ce039eff944516ff9e351c80057ca5f8035192db21724ac177ed",
+        "sequence.20.bin": "4e22b372005e3a09239102481e0184bd819351fb3a01d44854d67b3b79fddbf1",
+        "sequence.21.bin": "aaa03fe838591df5f20afa42118c70ed1f3bccdfb2e7a26a297e8239944b0876",
+        "sequence.22.bin": "d3bbb003300dcb7378f1d4f7037c1fa984315a414634871494a63089edc92c58",
+        "sequence.3.bin": "014a792055aa755f13eaf61df1885c1a9cbbcd0d0bb6faf15604c53a1d2ecab0",
+        "sequence.4.bin": "2700424fe382771fd8958cfa0430769b9930c4e4024191569502c867b398a3ac",
+        "sequence.5.bin": "a3f470ef07820e4adcbb2daf5ee670f2f31218b3753bac286680e4a985496369",
+        "sequence.6.bin": "988637d29b345803e6f1066c3b2d9a825f32fd99a7cdca7950e08f2710c1615e",
+        "sequence.7.bin": "376f9fbe57ce2917a3f98d57cc36b7f9ec3adfcddffef8f3d0a2a5f309266e09",
+        "sequence.8.bin": "0f18638a81a61c824a21ea05848a6609cf5f309af06de33c4cfd651fb742b892",
+        "sequence.9.bin": "98fc407f52876f857e59188b1c837509c7fca959b4bf99f054e6c5368f4bae95",
+        "sequence.X.bin": "683a8b7df78064669d98ff093eaeca87c43bfb26b3884cd7b8012814449c61c9",
+        "sequence.Y.bin": "47ade8589a27b0672ffe4d2d48cb72782a6c819fe0af1b1d91ae4ba8f3f74710",
+        "snpEffectPredictor.bin": "558dcc66825a31aa1e500dcae1fcf90e343d86f1940179340ae04195d341a170"
+      },
+      "database_sha256": "0b231feb4ae6179549224335df06ef54556db181791a12819e9db20ac309c5e1",
+      "input_vcf": "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n1\t6524705\t.\tC\tT\t.\tPASS\t.\n",
+      "input_vcf_sha256": "aefe70fa857b1fbc361536b9a4748a435d395ce0ba0a9a5cb3c7b17b1f5c8a7d",
+      "output_vcf_sha256": "b7a71562f15cf0ba4722c0ece8ebef607dcb4e233c32fe215734dc56adb3c994",
+      "stderr": "",
+      "software_version": "SnpEff\t5.4c\t2026-02-23",
+      "artifact_sources": {
+        "java": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip",
+        "java_publisher_sha256": "d35f31e712f0fcf6ac5a093edc90204fbff22f720ba3950bd09d331d5e621636",
+        "snpeff": "https://snpeff-public.s3.amazonaws.com/versions/snpEff_latest_core.zip",
+        "snpeff_archive_sha256": "3b06a1e1f939e7ebd5433387f088c1d3d1e0a7d472d63f39161b1fe9f00adf33",
+        "database": "https://snpeff-public.s3.amazonaws.com/databases/v5_2/snpEff_v5_2_GRCh38.mane.1.0.ensembl.zip"
+      }
+    }
+  }
+}

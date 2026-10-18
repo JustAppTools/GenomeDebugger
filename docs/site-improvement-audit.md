@@ -13,7 +13,11 @@ Reviewed 2026-10-13 against the local 0.4.0 application. Version 0.5.0 implement
 - Desktop and 390 px layouts were inspected. The action row and public-source grid overflow found during review were fixed.
 - Backend tests, frontend tests, production build, and production dependency audit pass.
 
-## Required next improvements
+## Original backlog (historical audit)
+
+The list below records the original review, not current defects. The current disposition is in [roadmap.md](roadmap.md). Version 0.6.0 implements multi-variant guided input, absolute regression assertions, reference-backed primary allele normalization, pinned local SnpEff execution, preserved historical VEP comparisons, stricter bundle replay, and the seven subsequent correctness fixes. Full historical pipeline execution, broader standards/assemblies, and causal validation remain separate milestones.
+
+## Original improvement items
 
 ### Scientific correctness and scope
 

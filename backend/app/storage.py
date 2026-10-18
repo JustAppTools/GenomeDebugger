@@ -7,6 +7,7 @@ from .regression import RegressionCase, RegressionRun
 from .ensembl import SourceQuery, SourceRecord
 from .ncbi import ReferenceCheck
 from .snpeff import SnpEffCheck
+from .allele_check import AlleleCheck
 
 
 class StorageLimitError(Exception):
@@ -48,6 +49,7 @@ def initialize(path: Path):
         db.execute("CREATE INDEX IF NOT EXISTS reference_checks_lookup ON reference_checks(source_record_id, checked_at)")
         db.execute("CREATE TABLE IF NOT EXISTS snpeff_checks (id TEXT PRIMARY KEY, source_record_id TEXT NOT NULL, checked_at TEXT NOT NULL, check_json TEXT NOT NULL)")
         db.execute("CREATE INDEX IF NOT EXISTS snpeff_checks_lookup ON snpeff_checks(source_record_id, checked_at)")
+        db.execute("CREATE TABLE IF NOT EXISTS allele_checks (id TEXT PRIMARY KEY, investigation_id TEXT NOT NULL, checked_at TEXT NOT NULL, check_json TEXT NOT NULL)")
 
 
 def save_snpeff_check(path: Path, check: SnpEffCheck):
@@ -71,6 +73,21 @@ def load_snpeff_check(path: Path, id_: str) -> SnpEffCheck | None:
     with sqlite3.connect(path) as db:
         row = db.execute("SELECT check_json FROM snpeff_checks WHERE id = ?", (id_,)).fetchone()
     return SnpEffCheck.model_validate_json(row[0]) if row else None
+
+
+def save_allele_check(path: Path, check: AlleleCheck):
+    initialize(path)
+    _guard_size(path, check.model_dump_json())
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT OR IGNORE INTO allele_checks VALUES (?, ?, ?, ?)",
+                   (check.id, check.investigation_id, check.checked_at, check.model_dump_json()))
+
+
+def latest_allele_check(path: Path, investigation_id: str) -> AlleleCheck | None:
+    initialize(path)
+    with sqlite3.connect(path) as db:
+        row = db.execute("SELECT check_json FROM allele_checks WHERE investigation_id = ? ORDER BY checked_at DESC LIMIT 1", (investigation_id,)).fetchone()
+    return AlleleCheck.model_validate_json(row[0]) if row else None
 
 
 def save_reference_check(path: Path, check: ReferenceCheck):
@@ -105,7 +122,15 @@ def save_source_record(path: Path, record: SourceRecord):
     _guard_size(path, record.model_dump_json())
     with sqlite3.connect(path) as db:
         db.execute("INSERT OR IGNORE INTO source_records VALUES (?, ?, ?, ?, ?)",
-                   (record.id, "ensembl_vep", _query_key(record.query), record.retrieved_at, record.model_dump_json()))
+                   (record.id, "ensembl_vep" if record.origin == "current_api" else "ensembl_vep_historical",
+                    _query_key(record.query), record.retrieved_at, record.model_dump_json()))
+
+
+def list_source_records(path: Path) -> list[SourceRecord]:
+    initialize(path)
+    with sqlite3.connect(path) as db:
+        rows=db.execute("SELECT record_json FROM source_records ORDER BY retrieved_at DESC LIMIT 200").fetchall()
+    return [SourceRecord.model_validate_json(row[0]) for row in rows]
 
 
 def load_source_record(path: Path, id_: str) -> SourceRecord | None:

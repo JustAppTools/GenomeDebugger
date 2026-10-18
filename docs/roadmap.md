@@ -1,24 +1,23 @@
 # Roadmap
 
-## Completed through 0.5.0
+## Completed through 0.6.0
 
-- [x] Focused competitor and standards assessment.
-- [x] Strict two-snapshot schema and local API.
-- [x] Conservative substitution identity comparison.
-- [x] Structured annotation, provenance, and condition-aware clinical comparison.
-- [x] Evidence-linked synthetic transcript replay with qualitative finding status.
-- [x] Browser comparison, discrepancy filters, evidence inspector, JSON/Markdown export.
-- [x] SQLite record storage, size limit, backend/frontend tests, Windows launch guide.
-- [x] Immutable saved regression cases, pinned and candidate replays, field-level pass/fail, changed evidence and input drift, persistent run history.
-- [x] Explicit current Ensembl VEP GRCh38 SNV adapter, reference-base check, release/assembly metadata, immutable local source records, cache-only and failure fallback modes, and transcript-row comparison. The public example is documented; external causation remains unverified.
-- [x] Pin NCBI's GRCh38.p14 primary chromosome mapping with source hash. Add an explicit, cached EFetch reference check and NCBI contextual SPDI/HGVS response capture. Validate two public examples, including a multi-term transcript, plus disagreement, offline, and unsupported-assembly cases. Reference agreement does not validate VEP consequences.
-- [x] Add additional annotation and exact-match variant rows, guided primary input, search and retention controls, backend health feedback, replay-checked portable bundles, user supplied SnpEff ANN comparison, and browser end-to-end smoke tests.
+- Strict snapshot/provenance schema, conservative local comparison, condition-aware clinical comparisons, evidence-linked synthetic replay, meaningful-change overrides, and offline demo.
+- Guided primary and additional variant/annotation editing, advanced JSON, saved-record search and retention, evidence inspection, regression workbench, JSON/Markdown exports, backend status, and Windows startup.
+- Immutable regression baselines and candidate assertions across all output rows, with input/evidence drift and persistent runs.
+- Explicit current Ensembl GRCh38 SNV capture, reference checking, preserved sources, transcript comparison, offline cache, and visible fallback warnings.
+- Pinned GRCh38.p14 NCBI mapping, independent reference/SPDI/HGVS checks including length-changing primary alleles and a captured repeat-deletion case.
+- Pinned local SnpEff execution with before/after artifact verification and preserved provenance. Exact transcript-version matching retains uncertainty.
+- Historical VEP output import with original bytes and declared metadata; comparisons and bundles can preserve two sources.
+- Replay-checked bundles up to 32 MB, archived 0.5.0 verification, versioned current result IDs, storage backup, and unit/API/browser suites.
+- Fixes for shared candidate drift, complex replacement identity, transcript-selector row matching, NCBI bundle contradictions, large bundle import, delimiter key collisions, and malformed guided input.
 
-## Next milestones
+## Further development
 
-1. Run an independently controlled annotation engine and preserve verifiable software, transcript database, and reference artifacts. The current SnpEff path compares user supplied output only.
-2. Introduce standards-aware, reference-backed normalization for indels and general SPDI/HGVS/VRS mappings, with explicit cross-assembly uncertainty. The current NCBI check covers only SNV notation.
-3. Expand independently sourced validation cases, multi-variant UI editing, significance rules, and large dataset performance.
-4. Add genuinely sourced version timelines, dependency graph visualization, and background jobs.
+1. Broaden independently sourced positive, negative, ambiguous, and transcript-version cases. Run deliberately controlled pipeline changes before upgrading any causal finding.
+2. Extend validated reference/normalization support to additional rows, assemblies, and sequence types; evaluate VRS and explicit cross-assembly mappings.
+3. Import original historical tool/database/reference artifacts where available and support full pipeline reproduction. Declared metadata alone cannot establish authenticity.
+4. Add genuinely sourced release timelines, dependency graphs, and background jobs when dataset size requires them.
+5. Evaluate larger datasets, additional browsers, accessibility, and deployment access controls before hosted or multi-user operation.
 
-No timeline data or source history will be inferred from present-day responses.
+No source history will be inferred from present-day responses. Scientific boundaries are recorded in [scientific-validity.md](scientific-validity.md).

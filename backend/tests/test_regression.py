@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.engine import compare
-from app.models import InvestigationInput, VariantRecord
+from app.models import Annotation, InvestigationInput, VariantRecord
 from app.regression import create_case, run_case
 
 
@@ -104,3 +104,37 @@ def test_case_and_run_api_persistence(tmp_path, monkeypatch):
     assert len(client.get(f"/api/regression-cases/{case['id']}/runs").json()) == 2
     candidate["snapshots"][0]["variant"]["alt"] = "AG"
     assert client.post(f"/api/regression-cases/{case['id']}/runs", json={"candidate": candidate}).status_code == 422
+
+
+@pytest.mark.parametrize("group", ["annotations", "variant_records"])
+def test_shared_annotation_drift_fails_even_when_discrepancy_is_unchanged(group):
+    payload = baseline().input
+    annotation = Annotation(gene_id="G2", transcript_id="T2", consequence="intron_variant")
+    for snapshot in payload.snapshots:
+        if group == "annotations":
+            snapshot.annotations = [annotation.model_copy(deep=True)]
+        else:
+            snapshot.variant_records = [VariantRecord(variant={"assembly":"GRCh38", "sequence_id":"NC_000001.11",
+                "position":104, "ref":"T", "alt":"G", "reference_context":{"start":100,"sequence":"GACGTACG"}},
+                annotations=[annotation.model_copy(deep=True)])]
+    case = create_case(compare(payload), "Shared drift")
+    candidate = payload.model_copy(deep=True)
+    for snapshot in candidate.snapshots:
+        row = snapshot.annotations[0] if group == "annotations" else snapshot.variant_records[0].annotations[0]
+        row.consequence = "missense_variant"
+    run = run_case(case, candidate)
+    assert run.status == "failed"
+    assert any(not check.passed and group in check.path and check.path.endswith("consequence")
+               for check in run.checks)
+    assert not any(not check.passed for check in run.checks if check.path.startswith("differences."))
+
+
+def test_annotation_order_does_not_fail_candidate():
+    payload = baseline().input
+    for snapshot in payload.snapshots:
+        snapshot.annotations = [Annotation(gene_id="G2", transcript_id=tid, consequence="intron_variant") for tid in ("T2", "T3")]
+    case = create_case(compare(payload), "Annotation order")
+    candidate = payload.model_copy(deep=True)
+    for snapshot in candidate.snapshots:
+        snapshot.annotations.reverse()
+    assert run_case(case, candidate).status == "passed"

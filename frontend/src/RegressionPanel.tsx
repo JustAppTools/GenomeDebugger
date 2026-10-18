@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowRight, CheckCircle2, ClipboardCheck, FlaskConical, History, Play, Save, XCircle } from 'lucide-react'
 import type { RegressionCase, RegressionRun, RegressionRunSummary, Result } from './types'
+import { isGuidedInput } from './GuidedInput'
 
 const API = '/api'
 function pretty(value: unknown): string { return value === undefined ? '—' : typeof value === 'string' ? value : JSON.stringify(value) }
@@ -75,7 +76,7 @@ export default function RegressionPanel({ result }: {result: Result}) {
     } catch {setError('Candidate JSON is invalid. Repair it in Advanced JSON mode.')}
   }
   let candidate: Result['input'] | null = null
-  try {candidate = JSON.parse(candidateText)} catch { /* handled when submitted */ }
+  try {const parsed:unknown=JSON.parse(candidateText);candidate=isGuidedInput(parsed)?parsed:null} catch { /* handled when submitted */ }
 
   const criticalFailures = run?.checks.filter(check => check.required && !check.passed) ?? []
   const evidenceChanges = run?.checks.filter(check => check.path.startsWith('evidence.') && !check.passed) ?? []

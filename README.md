@@ -1,6 +1,6 @@
 # GenomeDebugger
 
-GenomeDebugger is a local, research-oriented workstation for comparing two genomic analysis snapshots and tracing why their results differ. Version 0.5.0 adds guided input, additional variant and annotation rows, local record management, replay-checked bundles, and a comparison with user-supplied SnpEff ANN output. The synthetic transcript-selection investigation and regression workflow remain available offline. The tool does **not** assign clinical pathogenicity.
+GenomeDebugger is a local, research-oriented workstation for comparing two genomic analysis snapshots and tracing why their results differ. Version 0.6.0 adds guided multi-variant editing, reference-backed allele normalization, pinned local SnpEff execution, and historical VEP imports. It fixes regression assertions, row matching, bundle verification, and malformed-input handling. The synthetic transcript-selection investigation and regression workflow remain available offline. The tool does **not** assign clinical pathogenicity.
 
 ## Start on Windows
 
@@ -35,16 +35,16 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Select **Load synthetic dem
 
 ## What works
 
-- Strict validation of two versioned snapshots, provenance fields, optional additional `variant_records` and annotation rows, and an optional synthetic controlled lookup. The guided editor covers one primary variant; JSON mode exposes additional rows.
+- Strict validation of two versioned snapshots, provenance fields, optional additional `variant_records` and annotation rows, and an optional synthetic controlled lookup. The guided editor supports additional variants and annotations; JSON mode retains the full schema.
 - Reference-context-checked comparison of short substitution edits on the same assembly and sequence accession. Padded and unpadded descriptions of the demo substitution match. Local sequence agreement for indels remains **unresolved** until a validated assembly reference and standards-aware normalization establish equivalence.
 - Field-level differences with a meaningful-change filter. Clinical classification is compared only for matching condition IDs and frameworks.
 - Candidate findings linked to evidence. The synthetic demo replays the same lookup table with two transcript selections and verifies that the outputs match the supplied snapshots while tool, source release, configuration, and allele identity are held constant.
-- Local SQLite storage, search and deletion of unpinned investigations, JSON and Markdown exports, backup CLI, and portable bundles. Bundle import recomputes results with the current engine and checks preserved response hashes; contained hashes detect corruption but do not authenticate external data. Older saved records export as current-engine replays under a new input ID while their originals stay saved.
+- Local SQLite storage, search and deletion of unpinned investigations, JSON and Markdown exports, backup CLI, and portable bundles. Bundle import recomputes results with the current engine and checks preserved response hashes; contained hashes detect corruption but do not authenticate external data. Older saved records export as current-engine replays under a new versioned result ID while their originals stay saved. Archived 0.5.0 bundles remain verifiable under their original engine rules.
 - Immutable regression cases captured from saved investigations. Rerun a pinned case after an engine change, or paste candidate outputs for the same variant descriptions. The workbench shows pass/fail, failed fields, changed evidence, input drift, and saved run history.
 - Explicit **Public source** workflow for a GRCh38 SNV. **Fetch current from Ensembl** transmits only chromosome, position, reference, and alternate allele to `rest.ensembl.org`; **Load cached** makes no external request. The adapter checks the reference base against Ensembl sequence, records its assembly accession and reported release, preserves the VEP response and SHA-256 hash in local SQLite, and falls back to an existing cached record if a live request fails. Two transcripts from one preserved response can be compared as an investigation.
 - Optional **Check with NCBI** action on a saved Ensembl record. It uses the pinned GRCh38.p14 chromosome accession from [NCBI's assembly report](https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/GCF_000001405.40_GRCh38.p14_assembly_report.txt), retrieves the one-base RefSeq sequence through EFetch, and checks the SNV's zero-based SPDI and genomic HGVS against NCBI Variation Services. The original responses, URLs, hashes, and pass/disagree status are saved separately. **Load saved check** stays offline. If the reference base disagrees, the representation checks are skipped. This checks allele representation independently of Ensembl, not VEP consequence predictions.
-- Optional comparison of a user-supplied, single-variant SnpEff `ANN` VCF with every transcript in a preserved Ensembl record. Only exact transcript IDs and consequence term sets are compared. Missing transcript rows yield `unresolved`; mismatched terms yield `disagree`. The app does not run SnpEff or authenticate the declared version or database hash.
-- Other investigation input stays local. POST bodies are limited to 1 MB.
+- Optional comparison of a user-supplied, single-variant SnpEff `ANN` VCF with every transcript in a preserved Ensembl record. Only exact transcript IDs and consequence term sets are compared. Missing transcript rows yield `unresolved`; mismatched terms yield `disagree`. A separate runner supports pinned local SnpEff execution; supplied-output metadata remains user declared.
+- Other investigation input stays local. Ordinary POST bodies are limited to 1 MB. Compact bundle export and import/verification share a 32 MB limit.
 
 The synthetic `GENE-DEMO-1`, transcript names, and protein labels are fabricated. They are not ClinVar or Ensembl assertions. “Verified” in the demo means verified **within the supplied controlled synthetic fixture**, not independently confirmed against a biological reference assembly or external annotation system.
 
@@ -62,7 +62,7 @@ The API response contains `input`, `identity`, `differences`, `findings`, `evide
 
 ## Regression workflow
 
-After running an investigation, open **Regression** and save a named baseline. **Run pinned baseline** recomputes the saved input with the current engine and requires the same annotations, identity status, field differences, findings, and evidence data. **Check candidate** accepts new structured snapshot JSON for the exact same submitted variants. It checks expected outputs and findings, while listing provenance and evidence changes separately. Candidate evidence changes are informative and do not fail an otherwise matching output assertion. Both modes save their run results locally. Reopen an investigation from **Saved records** to access its regression case and run history.
+After running an investigation, open **Regression** and save a named baseline. **Run pinned baseline** recomputes the saved input with the current engine and requires the same annotations, identity status, field differences, findings, and evidence data. **Check candidate** accepts new structured snapshot JSON for the exact same submitted variants. It checks absolute primary and additional annotation and variant outputs and findings, while listing provenance and evidence changes separately. Shared changes in both snapshots fail; row ordering alone does not. Candidate evidence changes are informative and do not fail an otherwise matching output assertion. Both modes save their run results locally. Reopen an investigation from **Saved records** to access its regression case and run history.
 
 API equivalents: `POST /api/investigations/{id}/regression-cases` with `{"name":"..."}`, then `POST /api/regression-cases/{case_id}/runs` with `{}` for pinned replay or `{"candidate": <InvestigationInput>}` for a candidate. Retrieve saved cases and runs with the corresponding GET endpoints in `/docs`.
 
@@ -92,6 +92,32 @@ npm run test:e2e
 npm audit
 ```
 
+## Reference-backed allele identity
+
+After comparing non-synthetic snapshots, use **Check allele identity with NCBI** in the overview. This explicitly sends the two accessions, coordinates, and alleles to NCBI. EFetch validates each complete reference allele against pinned GRCh38.p14 primary nuclear sequences before Variation Services contextualizes SPDI and returns genomic HGVS. Length-changing alleles and repeat-shifted deletions are supported. Raw responses and hashes are saved, included in Markdown, and replay-verified in bundles. The independent check is separate from the stored local-context result. **Load saved allele check** stays offline. API: `POST /api/investigations/{id}/allele-check` with `{"mode":"fetch"}` or `{"mode":"cache_only"}`.
+
+The live example in [ncbi-repeat-deletion-observation.json](fixtures/ncbi-repeat-deletion-observation.json) compares chr1:10004 CC>C with chr1:10005 CC>C. Both yielded `NC_000001.11:10003:CCC:CC` and `NC_000001.11:g.10006del`. Annotation placeholders make no consequence claim.
+
+## Pinned local SnpEff
+
+Install once on Windows:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/setup_snpeff.py
+```
+
+The installer downloads official Eclipse Temurin Java, SnpEff, and `GRCh38.mane.1.0.ensembl`. It verifies the Java publisher checksum and pins observed software, configuration, and database file hashes in ignored `tools/snpeff/runtime.json`. Installation needs network access, disk space, and several minutes. Existing manifests are preserved. Override the manifest path with `GENOMEDEBUGGER_SNPEFF_MANIFEST` if needed.
+
+In **Public source**, load an Ensembl record, inspect local setup, then run local SnpEff. The runner verifies artifacts before and after execution, disables downloads/logging, uses a temporary working directory, and preserves input/output VCF, stderr, version, command, artifact sources and hashes. API: `GET /api/tools/snpeff` and `POST /api/sources/ensembl/records/{id}/snpeff-run`.
+
+Exact transcript versions are retained. The captured [real MANE run](fixtures/snpeff-mane-public-run.json) has unmatched transcript versions and remains unresolved. Install binaries/databases on each machine; they are not committed. Imported execution records preserve provenance but are not authenticated execution attestations.
+
+## Historical VEP output
+
+In **Public source**, expand **Import historical VEP output**. Upload actual VEP JSON for one GRCh38 SNV and declare its original time, release, software version, assembly accession, and artifact location. Original bytes and hashes are preserved. Load preserved sources and select two records and transcripts for comparison. Bundles retain both sources. Historical imports cannot satisfy current-source cache lookups.
+
+Dates and releases are declared provenance. This reconstructs comparisons from saved output; reproducing an old pipeline still needs its original executables, databases, configuration, and references. API: `POST /api/sources/historical-vep`, `GET /api/sources/records`, and `POST /api/sources/compare`; see `/docs` for schemas.
+
 ## Current boundaries
 
-The public adapter supports only current Ensembl GRCh38 SNVs and transcript consequence predictions. Its release metadata is observed during retrieval and does not prove an atomic or historical release snapshot; tool version is not reported by the API. The NCBI check supports only GRCh38.p14 primary nuclear chromosomes and single-base substitutions; mitochondrial HGVS is outside its scope. It validates one reference base and two notation services, not transcript consequences or clinical meaning. Additional variants can be compared by exact representation, but no full reference-genome download, reference-backed repeat-aware indel normalization, general HGVS/SPDI/VRS mapping, liftover, ClinVar adapter, or historical timeline exists yet. Regression checks rerun the local comparison engine, not VEP, NCBI, or SnpEff. User supplied snapshot and SnpEff metadata are not externally authenticated. The application is a research and bioinformatics quality-assurance tool, not a clinical device. See [scientific validity](docs/scientific-validity.md) and [roadmap](docs/roadmap.md).
+Current Ensembl and historical VEP import accept GRCh38 SNVs. NCBI identity checks short non-symbolic A/C/G/T primary alleles on pinned GRCh38.p14 primary nuclear sequences. Cross-assembly mapping, mitochondrial HGVS, VRS, and general notation parsing are unsupported. Additional rows match exact representations; independent normalization checks primary variants. No ClinVar adapter, clinical interpretation, or authenticated historical timeline exists. Regression checks rerun the comparator; SnpEff execution is an explicit separate action. Current Ensembl metadata does not prove an atomic release pin. Independent annotation agreement does not establish causal certainty. See [scientific validity](docs/scientific-validity.md) and [roadmap](docs/roadmap.md).

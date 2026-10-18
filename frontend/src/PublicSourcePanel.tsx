@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, Database, ExternalLink, Globe2 } from 'lucide-react'
 import type { Result } from './types'
 import SnpEffPanel from './SnpEffPanel'
+import HistoricalPanel from './HistoricalPanel'
 
 interface SourceRecord {
   id: string
@@ -101,6 +102,7 @@ export default function PublicSourcePanel({ onCompare }: { onCompare: (result: R
   }
 
   return <div className="source-stack">
+    <HistoricalPanel onCompare={onCompare}/>
     <section className="panel source-panel"><div className="panel-heading"><div><span className="eyebrow">PUBLIC DATA ADAPTER</span><h2>Ensembl VEP · current GRCh38</h2><p>Inspect transcript consequences for one single nucleotide variant. The default C→T example is from the Ensembl VEP API documentation.</p></div><Globe2 size={25}/></div>
       <div className="source-fields"><label>Chromosome<input aria-label="Chromosome" value={chromosome} onChange={e=>change(setChromosome,e.target.value)}/></label><label>Position, 1-based<input aria-label="Position" type="number" value={position} onChange={e=>change(setPosition,e.target.value)}/></label><label>Reference<input aria-label="Reference allele" maxLength={1} value={ref} onChange={e=>change(setRef,e.target.value)}/></label><label>Alternate<input aria-label="Alternate allele" maxLength={1} value={alt} onChange={e=>change(setAlt,e.target.value)}/></label></div><button className="text-button source-example" onClick={useSecondExample}>Use rs56116432 example with multiple consequence terms <ArrowRight size={13}/></button>
       <p className="source-notice">Fetch current sends only these coordinates and alleles to <b>rest.ensembl.org</b>. Reference base, assembly, release metadata, and VEP results are saved in the local SQLite cache. Load cached makes no external request.</p>

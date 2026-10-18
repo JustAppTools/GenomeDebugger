@@ -3,15 +3,19 @@ import sqlite3
 from pathlib import Path
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from app import main
 from app.engine import compare, digest
 from app.ensembl import CompareTranscripts, SourceQuery, comparison_input, fetch_record
-from app.models import InvestigationInput, InvestigationResult
-from app.storage import backup, StorageLimitError, RecordConflictError, save, save_source_record
+from app.models import InvestigationInput, InvestigationResult, ReferenceCheckSummary
+from app.storage import backup, StorageLimitError, RecordConflictError, save, save_source_record, save_reference_check
 from app.bundle import create_bundle, verify_bundle
+from app.legacy_engine_v050 import compare as compare_v050
+from app.ncbi import fetch_reference_check
 from test_ensembl import fixture_transport
+from test_ncbi import ncbi_transport
 
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "transcript-switch.json"
 
@@ -110,3 +114,63 @@ def test_bundle_rejects_rehashed_source_record_with_changed_reference(tmp_path):
         pass
     else:
         raise AssertionError("Changed source record passed replay checks")
+
+
+@pytest.mark.parametrize("field,value", [
+    ("observed_spdi", "contradicts-the-response"), ("observed_hgvs", "incorrect"),
+    ("spdi_matches", False), ("status", "disagree"), ("expected_spdi", "incorrect"),
+    ("refseq_accession", "NC_000002.12"), ("assembly_report_sha256", "0" * 64),
+])
+def test_bundle_replays_every_ncbi_observation(tmp_path, field, value):
+    with httpx.Client(transport=fixture_transport()) as client:
+        source = fetch_record(SourceQuery(chromosome="1", position=6524705, ref="C", alt="T"), client)
+    with httpx.Client(transport=ncbi_transport()) as client:
+        check = fetch_reference_check(source, client)
+    path = tmp_path / "reference.db"
+    save_source_record(path, source)
+    save_reference_check(path, check)
+    summary = ReferenceCheckSummary.model_validate(check.model_dump(include=set(ReferenceCheckSummary.model_fields)))
+    result = compare(comparison_input(source, CompareTranscripts(
+        transcript_a="ENST00000377705", transcript_b="ENST00000400913"), summary))
+    bundle = create_bundle(path, result)
+    verify_bundle(bundle)
+    bundle["entries"]["reference_check"][field] = value
+    bundle["sha256"]["reference_check"] = digest(bundle["entries"]["reference_check"])
+    with pytest.raises(ValueError, match="NCBI"):
+        verify_bundle(bundle)
+
+
+def test_archived_v050_bundle_remains_verifiable_and_has_separate_record_id(tmp_path):
+    payload = InvestigationInput.model_validate_json(FIXTURE.read_text())
+    legacy = compare_v050(payload)
+    entry = legacy.model_dump(mode="json")
+    entry.pop("engine_version")  # Original 0.5.0 exports did not include this field.
+    bundle = {"format":"GenomeDebugger bundle", "version":2, "engine_version":"0.5.0",
+              "entries":{"investigation":entry}, "sha256":{"investigation":digest(entry)}}
+    verified, *_ = verify_bundle(bundle)
+    current = compare(payload)
+    assert current.id != verified.id and current.input_sha256 == verified.input_sha256
+    save(tmp_path / "versions.db", verified)
+    save(tmp_path / "versions.db", current)
+    bundle["entries"]["investigation"]["findings"][0]["explanation"] = "tampered"
+    bundle["sha256"]["investigation"] = digest(bundle["entries"]["investigation"])
+    with pytest.raises(ValueError, match="replay"):
+        verify_bundle(bundle)
+
+
+def test_large_export_is_importable_while_input_limit_stays_one_mb(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "DB", tmp_path / "large.db")
+    client = TestClient(main.app)
+    data = json.loads(FIXTURE.read_text())
+    for side, snapshot in enumerate(data["snapshots"]):
+        snapshot["annotations"] = [{"gene_id":"BIG", "transcript_id":f"T{i}",
+            "consequence":("A" if side == 0 else "B") * 500} for i in range(500)]
+    assert len(json.dumps(data).encode()) < 1_000_000
+    response = client.post("/api/investigations", json=data)
+    assert response.status_code == 200
+    bundle = client.get(f"/api/investigations/{response.json()['id']}/bundle")
+    assert len(bundle.content) > 1_000_000
+    assert client.post("/api/bundles/verify", content=bundle.content, headers={"Content-Type":"application/json"}).status_code == 200
+    monkeypatch.setattr(main, "DB", tmp_path / "imported.db")
+    assert client.post("/api/bundles/import", content=bundle.content, headers={"Content-Type":"application/json"}).status_code == 200
+    assert client.post("/api/investigations", content=b' ' * 1_000_001).status_code == 413

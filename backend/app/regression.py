@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from .engine import compare, digest
+from .engine import compare, digest, row_key
 from .models import InvestigationInput, InvestigationResult, StrictModel, variant_key
 
 
@@ -59,8 +59,12 @@ def create_case(source: InvestigationResult, name: str) -> RegressionCase:
 
 def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
     if isinstance(value, dict):
+        if not value:
+            return {prefix: {}}
         return {key: item for k, v in value.items() for key, item in _flatten(v, f"{prefix}.{k}" if prefix else k).items()}
     if isinstance(value, list):
+        if not value:
+            return {prefix: []}
         return {key: item for index, item in enumerate(value) for key, item in _flatten(item, f"{prefix}[{index}]").items()}
     return {prefix: value}
 
@@ -104,6 +108,19 @@ def run_case(case: RegressionCase, candidate: InvestigationInput | None = None) 
         right = _flatten(actual.annotation.model_dump(mode="json"))
         for path in sorted(set(left) | set(right)):
             check(f"snapshots[{index}].annotation.{path}", left.get(path), right.get(path))
+        # Assert absolute outputs as well as their A/B differences. Shared drift
+        # in both analyses must fail even when the discrepancy itself is stable.
+        def collection_outputs(snapshot):
+            return {
+                "annotations": [row.model_dump(mode="json") for row in sorted(snapshot.annotations, key=row_key)],
+                "variant_records": [{"variant": record.variant.model_dump(mode="json"),
+                    "annotations": [row.model_dump(mode="json") for row in sorted(record.annotations, key=row_key)]}
+                    for record in sorted(snapshot.variant_records, key=lambda record: variant_key(record.variant))],
+            }
+        left = _flatten(collection_outputs(expected))
+        right = _flatten(collection_outputs(actual))
+        for path in sorted(set(left) | set(right)):
+            check(f"snapshots[{index}].{path}", left.get(path), right.get(path))
     check("identity.status", baseline.identity.status, actual_result.identity.status)
     expected_diffs, actual_diffs = _differences(baseline), _differences(actual_result)
     for field in sorted(set(expected_diffs) | set(actual_diffs)):

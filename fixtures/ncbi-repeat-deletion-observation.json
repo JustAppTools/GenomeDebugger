@@ -1,0 +1,162 @@
+{
+  "input": {
+    "title": "Public NCBI repeat-deletion identity validation; annotations not evaluated",
+    "synthetic": false,
+    "snapshots": [
+      {
+        "id": "A",
+        "label": "Repeat deletion at 10004",
+        "variant": {
+          "assembly": "GRCh38",
+          "sequence_id": "NC_000001.11",
+          "position": 10004,
+          "ref": "CC",
+          "alt": "C",
+          "reference_context": null
+        },
+        "annotation": {
+          "gene_id": "not_evaluated",
+          "transcript_id": "not_evaluated",
+          "consequence": "not_evaluated",
+          "protein_consequence": null,
+          "clinical": null
+        },
+        "annotations": [],
+        "variant_records": [],
+        "provenance": {
+          "tool": "NCBI public allele validation",
+          "tool_version": "not_applicable",
+          "source_name": "RefSeq GRCh38.p14",
+          "source_release": "GCF_000001405.40",
+          "source_uri": null,
+          "input_sha256": null,
+          "configuration": {}
+        }
+      },
+      {
+        "id": "B",
+        "label": "Repeat deletion at 10005",
+        "variant": {
+          "assembly": "GRCh38",
+          "sequence_id": "NC_000001.11",
+          "position": 10005,
+          "ref": "CC",
+          "alt": "C",
+          "reference_context": null
+        },
+        "annotation": {
+          "gene_id": "not_evaluated",
+          "transcript_id": "not_evaluated",
+          "consequence": "not_evaluated",
+          "protein_consequence": null,
+          "clinical": null
+        },
+        "annotations": [],
+        "variant_records": [],
+        "provenance": {
+          "tool": "NCBI public allele validation",
+          "tool_version": "not_applicable",
+          "source_name": "RefSeq GRCh38.p14",
+          "source_release": "GCF_000001405.40",
+          "source_uri": null,
+          "input_sha256": null,
+          "configuration": {}
+        }
+      }
+    ],
+    "controlled_lookup": null,
+    "reference_check": null,
+    "annotation_check": null,
+    "meaningful_overrides": {}
+  },
+  "check": {
+    "id": "c8781e7d8307aaf12b16",
+    "investigation_id": "98e87efb175eb2e8",
+    "input_sha256": "19841052a7f09c72283f2db6f105cec8fdfa93d4707d59d2e0efdb8c3892ea4e",
+    "checked_at": "2026-10-18T01:50:36.951905+00:00",
+    "assembly_report_uri": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/GCF_000001405.40_GRCh38.p14_assembly_report.txt",
+    "assembly_report_sha256": "64318ddff470b69b261a667d813210044f60d4ce654253a547db80ff73638d38",
+    "status": "agree",
+    "explanation": "Both submitted reference alleles match pinned RefSeq observations and NCBI contextual SPDI identifies the same allele.",
+    "observations": [
+      {
+        "variant": {
+          "assembly": "GRCh38",
+          "sequence_id": "NC_000001.11",
+          "position": 10004,
+          "ref": "CC",
+          "alt": "C",
+          "reference_context": null
+        },
+        "accession": "NC_000001.11",
+        "reference_uri": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_000001.11&strand=1&seq_start=10004&seq_stop=10005&rettype=fasta&retmode=text&tool=GenomeDebugger",
+        "reference_fasta": ">NC_000001.11:10004-10005 Homo sapiens chromosome 1, GRCh38.p14 Primary Assembly\nCC",
+        "reference_sha256": "3f7bd092905fa07ed6f98e74100aa4b3c37c7d334cae32e7ac9a703ec0c40bae",
+        "reference_matches": true,
+        "contextual_uri": "https://api.ncbi.nlm.nih.gov/variation/v0/spdi/NC_000001.11:10003:CC:C/contextual",
+        "contextual_response": {
+          "data": {
+            "seq_id": "NC_000001.11",
+            "position": 10003,
+            "deleted_sequence": "CCC",
+            "inserted_sequence": "CC"
+          }
+        },
+        "contextual_sha256": "c44bc135a7e2ca3df11920d072b792df31090f80128d2ccdedf87addfdd63c89",
+        "normalized": {
+          "seq_id": "NC_000001.11",
+          "position": 10003,
+          "deleted_sequence": "CCC",
+          "inserted_sequence": "CC"
+        },
+        "hgvs_uri": "https://api.ncbi.nlm.nih.gov/variation/v0/spdi/NC_000001.11:10003:CC:C/hgvs",
+        "hgvs_response": {
+          "data": {
+            "hgvs": "NC_000001.11:g.10006del"
+          }
+        },
+        "hgvs_sha256": "497927b7b028a5e20a493425446ba31feaaa8a0ca54b3b9e49fde6eed926407d",
+        "hgvs": "NC_000001.11:g.10006del"
+      },
+      {
+        "variant": {
+          "assembly": "GRCh38",
+          "sequence_id": "NC_000001.11",
+          "position": 10005,
+          "ref": "CC",
+          "alt": "C",
+          "reference_context": null
+        },
+        "accession": "NC_000001.11",
+        "reference_uri": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_000001.11&strand=1&seq_start=10005&seq_stop=10006&rettype=fasta&retmode=text&tool=GenomeDebugger",
+        "reference_fasta": ">NC_000001.11:10005-10006 Homo sapiens chromosome 1, GRCh38.p14 Primary Assembly\nCC",
+        "reference_sha256": "2834a1c1c1656fc4478a2904e69123597ea04b826ab6de08be89d9e9725274b0",
+        "reference_matches": true,
+        "contextual_uri": "https://api.ncbi.nlm.nih.gov/variation/v0/spdi/NC_000001.11:10004:CC:C/contextual",
+        "contextual_response": {
+          "data": {
+            "seq_id": "NC_000001.11",
+            "position": 10003,
+            "deleted_sequence": "CCC",
+            "inserted_sequence": "CC"
+          }
+        },
+        "contextual_sha256": "c44bc135a7e2ca3df11920d072b792df31090f80128d2ccdedf87addfdd63c89",
+        "normalized": {
+          "seq_id": "NC_000001.11",
+          "position": 10003,
+          "deleted_sequence": "CCC",
+          "inserted_sequence": "CC"
+        },
+        "hgvs_uri": "https://api.ncbi.nlm.nih.gov/variation/v0/spdi/NC_000001.11:10004:CC:C/hgvs",
+        "hgvs_response": {
+          "data": {
+            "hgvs": "NC_000001.11:g.10006del"
+          }
+        },
+        "hgvs_sha256": "497927b7b028a5e20a493425446ba31feaaa8a0ca54b3b9e49fde6eed926407d",
+        "hgvs": "NC_000001.11:g.10006del"
+      }
+    ]
+  }
+}

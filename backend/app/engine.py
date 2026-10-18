@@ -1,9 +1,11 @@
 import hashlib
 import json
+from urllib.parse import quote
 from .models import (
     Difference, Evidence, Finding, IdentityResult, InvestigationInput,
     InvestigationResult, Variant, variant_key,
 )
+from .version import ENGINE_VERSION
 
 
 def canonical_json(value) -> str:
@@ -12,6 +14,17 @@ def canonical_json(value) -> str:
 
 def digest(value) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def row_key(row) -> tuple[str, str, str, str]:
+    clinical = row.clinical
+    return (row.gene_id, row.transcript_id, clinical.framework if clinical else "",
+            clinical.condition_id if clinical else "")
+
+
+def row_label(key: tuple) -> str:
+    # Escape structural punctuation in field paths; match with tuples, not text.
+    return "|".join(quote(str(part), safe="._-") for part in key)
 
 
 def simple_edit(variant: Variant) -> tuple[int, str, str]:
@@ -35,7 +48,7 @@ def identity(a: Variant, b: Variant) -> IdentityResult:
         return IdentityResult(status="unresolved", explanation="Reference contexts differ; this MVP cannot validate that they describe the same sequence.", evidence_ids=["identity-inputs"])
     ea, eb = simple_edit(a), simple_edit(b)
     fmt = lambda e: f"{a.sequence_id}:{e[0]}:{e[1] or '-'}>{e[2] or '-'}"
-    if not ea[1] or not ea[2] or not eb[1] or not eb[2]:
+    if len(ea[1]) != len(ea[2]) or len(eb[1]) != len(eb[2]):
         def edited_sequence(variant: Variant) -> str:
             offset = variant.position - ca.start
             return ca.sequence[:offset] + variant.alt + ca.sequence[offset + len(variant.ref):]
@@ -70,8 +83,9 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
                 "evidence_ids": [*ident.evidence_ids, "reference-check"],
             })
     if annotation_check:
+        local_run = all(s.provenance.configuration.get("annotation_check_origin") == "local_execution" for s in (a,b))
         evidence.append(Evidence(id="annotation-check", kind="independent_annotation_output",
-                                 description="User-supplied SnpEff ANN output compared with preserved VEP transcripts; provenance is user declared",
+                                 description=("Preserved local SnpEff run compared with VEP transcripts; execution artifacts are recorded in the linked check" if local_run else "User-supplied SnpEff ANN output compared with preserved VEP transcripts; provenance is user declared"),
                                  data=annotation_check.model_dump()))
     differences: list[Difference] = []
 
@@ -97,29 +111,29 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     add("transcript_id", a.annotation.transcript_id, b.annotation.transcript_id)
     add("consequence", a.annotation.consequence, b.annotation.consequence)
     add("protein_consequence", a.annotation.protein_consequence, b.annotation.protein_consequence)
-    def row_key(row):
-        clinical = row.clinical
-        return "|".join((row.gene_id, row.transcript_id, clinical.framework if clinical else "", clinical.condition_id if clinical else ""))
-    # The selected annotation is compared above. Repeating it here invents
-    # missing-row changes whenever the selected transcript changes.
-    rows_a = {row_key(row): row for row in a.annotations}
-    rows_b = {row_key(row): row for row in b.annotations}
+    # Selection is compared above; full row sets include the selected row so a
+    # different selector does not turn an existing transcript into a missing row.
+    rows_a = {row_key(row): row for row in (a.annotation, *a.annotations)} if a.annotations or b.annotations else {}
+    rows_b = {row_key(row): row for row in (b.annotation, *b.annotations)} if a.annotations or b.annotations else {}
     for key in sorted(rows_a.keys() | rows_b.keys()):
         left, right = rows_a.get(key), rows_b.get(key)
+        label = row_label(key)
+        if key == row_key(a.annotation) == row_key(b.annotation):
+            continue  # Primary fields already have a comparison and evidence.
         if left is None or right is None:
-            add(f"annotations[{key}].presence", "present" if left else None, "present" if right else None)
+            add(f"annotations[{label}].presence", "present" if left else None, "present" if right else None)
             continue
-        add(f"annotations[{key}].consequence", left.consequence, right.consequence)
-        add(f"annotations[{key}].protein_consequence", left.protein_consequence, right.protein_consequence)
+        add(f"annotations[{label}].consequence", left.consequence, right.consequence)
+        add(f"annotations[{label}].protein_consequence", left.protein_consequence, right.protein_consequence)
         if left.clinical and right.clinical:
-            add(f"annotations[{key}].clinical.classification", left.clinical.classification, right.clinical.classification, "clinical")
-            add(f"annotations[{key}].clinical.review_status", left.clinical.review_status, right.clinical.review_status, "clinical")
+            add(f"annotations[{label}].clinical.classification", left.clinical.classification, right.clinical.classification, "clinical")
+            add(f"annotations[{label}].clinical.review_status", left.clinical.review_status, right.clinical.review_status, "clinical")
     extra_identity_issues: list[str] = []
     variant_rows_a = {variant_key(row.variant): row for row in a.variant_records}
     variant_rows_b = {variant_key(row.variant): row for row in b.variant_records}
     for variant_id in sorted(variant_rows_a.keys() | variant_rows_b.keys()):
         left, right = variant_rows_a.get(variant_id), variant_rows_b.get(variant_id)
-        label = f"variant_records[{variant_id[0]}|{variant_id[1]}:{variant_id[2]}:{variant_id[3]}>{variant_id[4]}]"
+        label = f"variant_records[{quote(variant_id[0], safe='._-')}|{quote(variant_id[1], safe='._-')}:{variant_id[2]}:{variant_id[3]}>{variant_id[4]}]"
         if left is None or right is None:
             add(f"{label}.presence", "present" if left else None, "present" if right else None, "variant")
             continue
@@ -135,15 +149,16 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         right_rows = {row_key(row): row for row in right.annotations}
         for key in sorted(left_rows.keys() | right_rows.keys()):
             before, after = left_rows.get(key), right_rows.get(key)
+            annotation_label = row_label(key)
             if before is None or after is None:
-                add(f"{label}.annotations[{key}].presence", "present" if before else None,
+                add(f"{label}.annotations[{annotation_label}].presence", "present" if before else None,
                     "present" if after else None)
                 continue
-            add(f"{label}.annotations[{key}].consequence", before.consequence, after.consequence)
-            add(f"{label}.annotations[{key}].protein_consequence", before.protein_consequence, after.protein_consequence)
+            add(f"{label}.annotations[{annotation_label}].consequence", before.consequence, after.consequence)
+            add(f"{label}.annotations[{annotation_label}].protein_consequence", before.protein_consequence, after.protein_consequence)
             if before.clinical and after.clinical:
-                add(f"{label}.annotations[{key}].clinical.classification", before.clinical.classification, after.clinical.classification, "clinical")
-                add(f"{label}.annotations[{key}].clinical.review_status", before.clinical.review_status, after.clinical.review_status, "clinical")
+                add(f"{label}.annotations[{annotation_label}].clinical.classification", before.clinical.classification, after.clinical.classification, "clinical")
+                add(f"{label}.annotations[{annotation_label}].clinical.review_status", before.clinical.review_status, after.clinical.review_status, "clinical")
     add("tool", a.provenance.tool, b.provenance.tool, "provenance")
     add("tool_version", a.provenance.tool_version, b.provenance.tool_version, "provenance")
     add("source_name", a.provenance.source_name, b.provenance.source_name, "provenance")
@@ -209,4 +224,5 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     if not findings and differences:
         findings.append(Finding(status="unresolved", cause="unexplained change", explanation="Field differences were observed, but no controlled explanation was established.", affected_fields=[d.field for d in differences if d.meaningful], evidence_ids=[differences[0].evidence_ids[0]]))
     hash_ = digest(raw)
-    return InvestigationResult(id=hash_[:16], input=payload, identity=ident, differences=differences, findings=findings, evidence=evidence, input_sha256=hash_)
+    record_id = digest({"engine_version": ENGINE_VERSION, "input_sha256": hash_})[:16]
+    return InvestigationResult(id=record_id, engine_version=ENGINE_VERSION, input=payload, identity=ident, differences=differences, findings=findings, evidence=evidence, input_sha256=hash_)

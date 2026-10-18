@@ -138,3 +138,35 @@ def test_lookup_must_match_observations_and_allele():
     data = sample()
     data["controlled_lookup"]["variant"]["alt"] = "G"
     assert not any(f.status == "verified" for f in run(data).findings)
+
+
+@pytest.mark.parametrize("ref,alt", [("AC", "T"), ("A", "CT"), ("AC", "ATG")])
+def test_length_changing_replacements_never_gain_verified_identity(ref, alt):
+    variant = Variant(assembly="GRCh38", sequence_id="NC_000001.11", position=101,
+                      ref=ref, alt=alt, reference_context={"start":100,"sequence":"GACGTACG"})
+    assert identity(variant, variant).status == "unresolved"
+
+
+def test_selection_changes_do_not_invent_missing_annotations():
+    data = sample()
+    left, right = data["snapshots"]
+    left["annotations"] = [deepcopy(right["annotation"])]
+    right["annotations"] = [deepcopy(left["annotation"])]
+    result = run(data)
+    assert not any(d.field.endswith(".presence") for d in result.differences)
+    assert any(d.field == "transcript_id" for d in result.differences)
+    # A genuinely missing row must still be detected.
+    right["annotations"] = []
+    assert any(d.field.endswith(".presence") for d in run(data).differences)
+
+
+def test_delimiters_in_identifiers_cannot_hide_annotation_changes():
+    data = sample()
+    rows = [{"gene_id":"G|X","transcript_id":"T","consequence":"intron_variant"},
+            {"gene_id":"G","transcript_id":"X|T","consequence":"intron_variant"}]
+    for snapshot in data["snapshots"]:
+        snapshot["annotations"] = deepcopy(rows)
+    data["snapshots"][1]["annotations"][0]["consequence"] = "missense_variant"
+    result = run(data)
+    change = next(d for d in result.differences if d.field == "annotations[G%7CX|T||].consequence")
+    assert change.before == "intron_variant" and change.after == "missense_variant"

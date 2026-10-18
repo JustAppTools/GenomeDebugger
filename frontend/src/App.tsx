@@ -3,8 +3,10 @@ import { Activity, ArrowRight, Braces, Check, ChevronDown, ClipboardCheck, Clipb
 import type { Difference, Evidence, InvestigationInput, Result, Snapshot } from './types'
 import RegressionPanel from './RegressionPanel'
 import PublicSourcePanel from './PublicSourcePanel'
-import GuidedInput, { blankInput, validateGuidedInput } from './GuidedInput'
+import GuidedInput, { blankInput, isGuidedInput, validateGuidedInput } from './GuidedInput'
 import InvestigationLibrary from './InvestigationLibrary'
+import AlleleCheckPanel from './AlleleCheckPanel'
+import { MAX_BUNDLE_BYTES, MAX_INPUT_BYTES } from './limits'
 
 type Tab = 'overview' | 'differences' | 'evidence' | 'regression' | 'input' | 'source' | 'library'
 const API = '/api'
@@ -102,6 +104,15 @@ export default function App() {
 
   function selectTab(next:Tab) {setTab(next);setError('');setNotice('')}
 
+  function openGuided() {
+    if (!inputText.trim()) setInputText(JSON.stringify(blankInput(),null,2))
+    else if (!isGuidedInput(parsed)) {
+      setError(`Repair the JSON before opening the guide: ${validateGuidedInput(parsed).join('; ')}`)
+      return
+    }
+    setError('');setInputMode('guided')
+  }
+
   async function openInvestigation(id: string) {
     setBusy(true); setError('')
     try {
@@ -154,14 +165,14 @@ export default function App() {
       if (!response.ok) throw new Error(`Bundle unavailable (${response.status})`)
       const bundle = await response.json()
       const exportedId = bundle.entries.investigation.id as string
-      download(`genomedebugger-${exportedId}-bundle.json`, JSON.stringify(bundle,null,2), 'application/json')
+      download(`genomedebugger-${exportedId}-bundle.json`, JSON.stringify(bundle), 'application/json')
       if (bundle.replayed_from_id) setNotice(`This older investigation was replayed with the current engine for portable export. The bundle contains record ${exportedId}; the original record remains saved as ${bundle.replayed_from_id}.`)
     } catch(e) {setError(e instanceof Error?e.message:'Bundle export failed')}
   }
   async function loadInputFile(file:File) {
     setError('')
     try {
-      if (file.size > 1_000_000) throw new Error('JSON input exceeds the 1 MB limit')
+      if (file.size > MAX_INPUT_BYTES) throw new Error('JSON input exceeds the 1 MB limit')
       const content = await file.text()
       JSON.parse(content)
       setInputText(content);setInputDirty(true);setInputMode('json');setTab('input')
@@ -170,7 +181,7 @@ export default function App() {
   async function importBundle(file:File) {
     setError('')
     try {
-      if (file.size > 1_000_000) throw new Error('Bundle exceeds the 1 MB import limit')
+      if (file.size > MAX_BUNDLE_BYTES) throw new Error('Bundle exceeds the 32 MB import limit')
       const content = JSON.parse(await file.text())
       const options = {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(content)}
       const verified = await fetch(`${API}/bundles/verify`,options)
@@ -192,9 +203,11 @@ export default function App() {
     <main className="main"><header className="topbar"><div className="breadcrumbs">Workspace <span>/</span> Investigations <span>/</span> <b>{result ? result.id : 'New investigation'}</b></div><div className="top-actions"><span className="local-badge"><span className={`online-dot ${engineState}`}/> {engineState==='online'?'Local engine connected':engineState==='offline'?'Local engine offline':'Checking local engine'}</span></div></header>
       <div className="content"><div className="page-intro"><div><span className="eyebrow accent"><Activity size={15}/> GENOMIC REPRODUCIBILITY</span><h1>{tab==='source'?'Public source inspector':tab==='library'?'Saved investigations':'Investigation workspace'}</h1><p>{tab==='source'?'Query current public Ensembl data and preserve the response locally.':tab==='library'?'Find, reopen, and manage local records.':'Trace why two analyses disagree, inspect the evidence, and preserve a reproducible record.'}</p></div>{tab!=='source'&&tab!=='library'&&<div className="intro-actions"><button className="button secondary" onClick={loadDemo} disabled={busy}><FlaskConical size={17}/> Load synthetic demo</button><button className="button primary" onClick={run} disabled={busy || !parsed || guidedInvalid}><Sparkles size={17}/>{busy?'Working…':'Run comparison'}</button></div>}</div>
       {error && <div role="alert" className="error"><Info size={17}/><span>{error}</span></div>}{notice && <div role="status" className="input-notice">{notice}</div>}
+      {result && engineVersion && (result.engine_version ?? '0.5.0') !== engineVersion && <div className="input-notice" role="status">Historical result from engine {result.engine_version ?? '0.5.0'}. Run comparison to save a separate result with engine {engineVersion}.</div>}
       {!result && tab !== 'input' && tab !== 'source' && tab !== 'library' && <div className="welcome"><div className="welcome-icon"><Dna size={34}/></div><span className="eyebrow">START HERE</span><h2>Debug an analysis discrepancy</h2><p>Run the synthetic transcript switch example to see the comparison and its controlled explanation. You can inspect or edit the input under Snapshot JSON.</p><div className="welcome-steps"><span><b>01</b> Compare snapshots</span><ArrowRight size={16}/><span><b>02</b> Inspect cause</span><ArrowRight size={16}/><span><b>03</b> Review evidence</span></div><button className="button primary" onClick={loadDemo} disabled={busy}><FlaskConical size={17}/> Load synthetic demo</button></div>}
       {result && tab!=='source' && tab!=='library' && <><div className="summary-strip"><div><span>IDENTITY</span>{identityPill(result.identity.status)}</div><div><span>DIFFERENCES</span><strong>{result.differences.length}</strong></div><div><span>MEANINGFUL</span><strong>{result.differences.filter(d=>d.meaningful).length}</strong></div><div><span>ROOT CAUSE</span>{pill(result.findings[0]?.status ?? 'unresolved')}</div><div><span>RECORD</span><code>{result.id}</code></div></div>{inputChanged && <div className="input-notice" role="status">The snapshot JSON has changed. The displayed investigation still reflects the previous input; run comparison to update it.</div>}<nav className="tabs" aria-label="Investigation sections"><button className={tab==='overview'?'selected':''} onClick={()=>setTab('overview')}>Overview</button><button className={tab==='differences'?'selected':''} onClick={()=>setTab('differences')}>Differences <span>{result.differences.length}</span></button><button className={tab==='evidence'?'selected':''} onClick={()=>setTab('evidence')}>Evidence <span>{result.evidence.length}</span></button><button className={tab==='regression'?'selected':''} onClick={()=>setTab('regression')}>Regression</button><button className={tab==='input'?'selected':''} onClick={()=>setTab('input')}>Snapshot JSON</button></nav></>}
       {result && tab==='overview' && a && b && <><div className="section-title"><div><span className="eyebrow">SIDE BY SIDE</span><h2>Compared analyses</h2></div>{result.input.synthetic&&<span className="synthetic-label"><FlaskConical size={14}/> SYNTHETIC DATA</span>}</div><div className="snapshot-grid"><SnapshotCard snapshot={a} side="A"/><SnapshotCard snapshot={b} side="B"/></div><div className="two-col"><section className="panel identity-card"><div className="card-title"><div className="card-icon blue"><Dna size={19}/></div><div><span className="eyebrow">VARIANT IDENTITY</span><h2>Same allele?</h2></div>{identityPill(result.identity.status)}</div><p>{result.identity.explanation}</p><div className="edit-pair"><div><label>ANALYSIS A EDIT</label><code>{pretty(result.identity.normalized_a)}</code></div><div><label>ANALYSIS B EDIT</label><code>{pretty(result.identity.normalized_b)}</code></div></div><button className="text-button" onClick={()=>inspectEvidence(result.identity.evidence_ids[0])}>Inspect identity evidence <ArrowRight size={14}/></button></section><section className="panel finding-card"><div className="card-title"><div className="card-icon green"><Workflow size={19}/></div><div><span className="eyebrow">ROOT CAUSE WORKBENCH</span><h2>Investigation findings</h2></div></div>{result.findings.map((f,i)=><div className="finding" key={i}><div className="finding-header">{pill(f.status)}<strong>{f.cause}</strong></div><p>{f.explanation}</p><div className="finding-footer"><span>{f.affected_fields.join(' · ')}</span><button className="text-button" onClick={()=>inspectEvidence(f.evidence_ids[0])}>View test <ArrowRight size={13}/></button></div></div>)}</section></div><div className="export-card"><div className="export-icon"><ClipboardList size={21}/></div><div><h3>Reproducible investigation record</h3><p>Includes original inputs, field comparisons, findings, evidence, and SHA-256 input hash.</p><code className="record-hash">{result.input_sha256}</code></div><div className="export-actions"><button className="button secondary" onClick={()=>download(`genomedebugger-${result.id}.json`, JSON.stringify(result,null,2),'application/json')}><FileJson size={16}/> JSON</button><button className="button secondary" onClick={exportMarkdown}><FileText size={16}/> Markdown</button><button className="button secondary" onClick={exportBundle}><FileJson size={16}/> Bundle</button></div></div></>}
+      {result && tab==='overview' && <AlleleCheckPanel key={result.id} id={result.id} synthetic={result.input.synthetic}/>}
       {result && tab==='differences' && <DifferenceTable differences={result.differences} onEvidence={inspectEvidence}/>}
       {result && tab==='evidence' && <EvidencePanel evidence={result.evidence} selected={selectedEvidence} onSelect={setSelectedEvidence}/>}
       {result && tab==='regression' && <RegressionPanel result={result}/>}
@@ -202,7 +215,7 @@ export default function App() {
       {tab==='library' && <InvestigationLibrary onOpen={openInvestigation} onImport={file=>{void importBundle(file)}} onDeleted={id=>{setRecent(previous=>previous.filter(item=>item.id!==id));if(result?.id===id)setResult(null)}}/>}
       {tab==='input' && <section className="panel input-panel">
         <div className="panel-heading"><div><span className="eyebrow">VERSIONED INPUT</span><h2>Analysis snapshots</h2><p>Build two analyses with the guide, or edit the complete JSON schema. Data is sent only to the local backend when you compare.</p></div><div className="input-actions"><button className="button secondary" onClick={loadDemo} disabled={busy}><FlaskConical size={16}/> Run demo</button><button className="button primary" onClick={run} disabled={!parsed||busy||guidedInvalid}><GitCompareArrows size={16}/> Compare</button></div></div>
-        <div className="input-toolbar"><button className={inputMode==='guided'?'selected':''} onClick={()=>{if(!parsed||validateGuidedInput(parsed)[0]==='Two complete analysis snapshots are required')setInputText(JSON.stringify(blankInput(),null,2));setInputMode('guided')}}>Guided form</button><button className={inputMode==='json'?'selected':''} onClick={()=>setInputMode('json')}>JSON editor</button><label className="button secondary">Import JSON<input aria-label="Import input JSON" type="file" accept=".json,application/json" onChange={e=>{const file=e.target.files?.[0];if(file)void loadInputFile(file);e.target.value=''}}/></label></div>
+        <div className="input-toolbar"><button className={inputMode==='guided'?'selected':''} onClick={openGuided}>Guided form</button><button className={inputMode==='json'?'selected':''} onClick={()=>setInputMode('json')}>JSON editor</button><label className="button secondary">Import JSON<input aria-label="Import input JSON" type="file" accept=".json,application/json" onChange={e=>{const file=e.target.files?.[0];if(file)void loadInputFile(file);e.target.value=''}}/></label></div>
         {inputMode==='guided' ? <GuidedInput value={parsed} onChange={next=>{setInputText(JSON.stringify(next,null,2));setInputDirty(true)}} onRun={run} busy={busy}/> : <><textarea aria-label="Investigation JSON" spellCheck={false} value={inputText} onChange={e=>{setInputText(e.target.value);setInputDirty(true)}} placeholder="Run the synthetic demo or paste an InvestigationInput JSON document…"/><div className="editor-foot"><span>{inputText ? parsed ? <><Check size={15}/> Valid JSON · schema checked on submit</> : 'Invalid JSON' : 'No input loaded'}</span><a href="/api/demos/transcript-switch" target="_blank" rel="noreferrer">View example schema <ArrowRight size={13}/></a></div></>}
       </section>}
       <footer><span><Dna size={15}/> GenomeDebugger · Research and bioinformatics QA</span><span>Not for clinical diagnosis</span></footer></div>

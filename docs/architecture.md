@@ -1,49 +1,26 @@
 # Architecture and data model
 
-## Current system
+The React/TypeScript frontend submits snapshot input to a loopback FastAPI service. `models.py` owns strict schemas; `engine.py` performs pure deterministic comparisons; `regression.py` builds immutable assertions; `storage.py` persists SQLite; `bundle.py` verifies portable records; `report.py` renders Markdown. Comparison and bundle replay make no network calls.
 
-The React/TypeScript frontend loads or accepts `InvestigationInput` JSON, sends it to the local FastAPI backend, and displays the returned `InvestigationResult`. The backend separates Pydantic schema validation (`models.py`), deterministic comparison (`engine.py`), immutable regression assertions (`regression.py`), SQLite persistence (`storage.py`), bundle replay checks (`bundle.py`), and Markdown reporting (`report.py`). `main.py` exposes the API. Explicit actions in the Public source panel call `ensembl.py` and `ncbi.py`, each preserving source observations in SQLite. `snpeff.py` compares a supplied VCF without running another engine. No comparison logic makes network calls.
+Explicit source actions use `ensembl.py` for current GRCh38 SNVs, `ncbi.py` for source-bound SNV checks, and `allele_check.py` for reference-backed contextual SPDI/HGVS checks of the two primary alleles. `historical.py` parses original VEP JSON with declared metadata. Historical imports have a separate source kind and never enter the current-source cache.
 
-```mermaid
-flowchart LR
-  UI[React investigation workspace] --> API[FastAPI]
-  API --> S[Pydantic schema]
-  S --> E[Pure comparison engine]
-  E --> DB[(Local SQLite)]
-  E --> R[Evidence-linked result]
-  R --> UI
-  R --> M[Markdown / JSON export]
-  UI -->|Explicit fetch| A[Ensembl adapter]
-  A -->|Current public response| DB
-  UI -->|Explicit reference check| N[NCBI adapter]
-  N -->|Pinned accession observation| DB
-```
+`snpeff.py` compares exact transcript IDs and consequence sets. `snpeff_runner.py` optionally runs locally installed Java/SnpEff/database artifacts after verifying their hashes. It disables downloads/logging, uses a temporary working directory, preserves execution provenance, and verifies artifacts again afterward. The Windows installer is `scripts/setup_snpeff.py`; artifacts stay in ignored `tools/snpeff`.
 
-## Data model
+## Records
 
-- `Snapshot`: stable ID and label; one primary `Variant` and `Annotation`, optional additional annotations for that variant, and optional `variant_records` carrying other exact variants and their annotations; `Provenance` with tool/version, source/release, optional URI/input hash, and configuration map.
-- `Variant`: assembly, sequence accession, one-based position, VCF-style nonempty `ref`/`alt`, optional reference context (`start`, `sequence`). Current validation handles A/C/G/T alleles only.
-- `Annotation`: gene and transcript IDs, molecular consequence, optional protein consequence, optional clinical assertion. The latter carries framework and condition ID to prevent inappropriate direct comparisons.
-- `ControlledLookup`: optional synthetic table bound to a variant. A replay selects transcript rows from the same table and checks all recorded gene/consequence/protein outputs. A unique transcript ID is required per row.
-- `InvestigationResult`: canonical-input SHA-256, variant identity result, field differences, findings, and individually addressable evidence objects. Findings contain evidence IDs and a qualitative status (`verified`, `probable`, `possible`, `unresolved`). The current engine does not emit `probable` because it has no calibrated supporting rule for that category.
-- `RegressionCase`: immutable copy of one saved investigation and its expected observations, with case schema version and creation time. It is stored separately from the source investigation, so a later source-record change cannot change the baseline.
-- `RegressionRun`: pinned or candidate mode, actual recomputed result, required checks, evidence-hash checks, changed input paths, and pass/fail status. A candidate must preserve each original submitted variant exactly; changes to tool or source versions are recorded and may still pass if expected outputs hold.
-- `SourceRecord`: immutable local capture of one current VEP response, exact query, one-base Ensembl reference, reported assembly accession/releases, retrieval time, source URLs, response hash, and parsed transcript consequences. A comparison selects two rows from this record and produces ordinary snapshots with matching provenance. It does not add a controlled replay.
-- `ReferenceCheck`: immutable local capture tied to one `SourceRecord`. It records the pinned NCBI assembly-report hash, RefSeq accession, EFetch FASTA, contextual SPDI, HGVS response, source URIs/hashes, and agreement flags. A reference mismatch skips the representation requests. A generated transcript comparison includes the latest check summary in the input and its ID/status in both snapshots' provenance. Agreement does not upgrade a causal finding; disagreement makes cross-source identity unresolved and adds linked evidence.
-- `SnpEffCheck`: saved user supplied VCF, declared software/database metadata, exact transcript consequence matches and unmatched rows. It can be linked to an Ensembl source comparison, but its provenance is not authenticated.
-- Bundle version 2: a current-engine replay of one investigation plus available preserved source/check records. Verification checks entry hashes, source/check raw hashes and IDs, and exact recomputed investigation output. It does not establish external authenticity.
+- `Snapshot`: primary variant/annotation, additional annotations and `variant_records`, software/source/configuration provenance.
+- `Variant`: assembly/accession, one-based position, nonempty A/C/G/T ref/alt, optional supplied reference context. Additional variants match exact submitted representation.
+- `Annotation`: gene, transcript, consequence, optional protein and condition/framework-scoped clinical assertion. Tuple keys avoid delimiter collisions.
+- `InvestigationResult`: engine version, canonical input hash, versioned result ID, identity, differences, findings, evidence. Current version is centralized in `version.py`.
+- `RegressionCase` and `RegressionRun`: immutable saved outputs, absolute assertions for all annotation/variant rows, evidence checks, input drift, run history. Candidate evidence changes are informative; output changes fail.
+- `SourceRecord`: current capture or historical artifact, query, assembly/releases, timestamps, response/hash, transcript rows. Historical artifacts retain exact original text and declared metadata.
+- `ReferenceCheck`: source-bound NCBI FASTA, SPDI/HGVS responses, pinned assembly metadata, hashes, agreement flags.
+- `AlleleCheck`: investigation-bound observations for both primary variants, complete ref validation, SPDI/HGVS, URLs/hashes, agree/disagree status. Separate from the stored local-context result.
+- `SnpEffCheck`: ANN VCF, declared metadata, exact transcript matches and unmatched rows, optional recorded local execution/artifact provenance.
+- Bundle version 2: investigation, up to two linked sources, exact linked source checks, optional allele check, entry hashes, engine version. Verification derives observations from responses and replays output. Frozen `legacy_engine_v050.py` verifies archived 0.5.0 records only.
 
-## Comparison decisions
+## Boundaries
 
-1. Validate inputs, including that each `ref` matches the supplied context.
-2. Establish allele identity only when assembly, sequence accession, and reference context exactly agree and both trimmed edits are nonempty substitutions. This trim is **not** a full normalizer. Indels remain unresolved.
-3. Compare structured fields and match additional variants by exact submitted representation. Position/ref/alt spelling changes are nonmeaningful only if identity was established. Keep molecular and clinical fields separate.
-4. Compare clinical classifications only inside the same condition and framework. Otherwise record a comparability finding.
-5. For transcript-related output changes, replay the synthetic table only when the allele, tool, version, source release, and configuration are held constant. A matching replay earns `verified` within the fixture. Otherwise report a possible or unresolved cause.
-6. Store the full result locally, including supporting evidence, and export it.
+Local-context identity requires identical declared assembly/accession/context and equal-length substitution edits. Length-changing edits remain unresolved in the pure engine. Independent NCBI checks can establish matching observed contextual alleles on pinned primary nuclear sequences; cross-assembly mapping remains unsupported. Clinical and causal boundaries are described in [scientific-validity.md](scientific-validity.md).
 
-## Adapter boundary
-
-External data enters only on a `mode: fetch` request. `mode: cache_only` never calls Ensembl or NCBI. A live Ensembl fetch checks release and assembly metadata, the one-base reference, and the VEP response, then inserts a separate preserved record. The NCBI adapter requires the report's GRCh38.p14 GenBank assembly accession to match that record, maps its chromosome to a versioned RefSeq accession, and validates one base and two notation responses. Failures use prior cached records only with an explicit warning. A current API response never replaces a historical snapshot. The release number is observed metadata, not proof of an atomic release pin. A future generalized normalized allele service should use a validated sequence repository and standards-aware library, rather than extending the current flank trim to repeats.
-
-SQLite is appropriate for small local investigations. Larger datasets and background jobs may require a queue and a separate data store; those are not part of this release.
+Ordinary POST requests accept 1 MB. Bundle import/verification and compact export share a 32 MB limit. SQLite has a configurable storage budget and backup support. Result IDs include engine version so replay cannot overwrite history. Hashes and replay detect contradictions but do not authenticate external data or imported execution claims. A current API capture never substitutes for a historical artifact.

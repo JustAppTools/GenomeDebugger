@@ -116,7 +116,7 @@ def _json(client: httpx.Client, url: str, *, variation: bool = False) -> dict:
     return result
 
 
-def fetch_reference_check(record: SourceRecord, client: httpx.Client | None = None) -> ReferenceCheck:
+def _reference_metadata(record: SourceRecord) -> dict:
     manifest = _manifest()
     if record.assembly_name != manifest["assembly_name"] or record.assembly_accession != manifest["genbank_assembly_accession"]:
         raise ReferenceCheckError("The pinned NCBI mapping does not match this Ensembl assembly")
@@ -135,48 +135,74 @@ def fetch_reference_check(record: SourceRecord, client: httpx.Client | None = No
                      f"&seq_stop={q.position}&rettype=fasta&retmode=text&tool=GenomeDebugger")
     contextual_uri = f"{VARIATION}/spdi/{spdi}/contextual"
     hgvs_uri = f"{VARIATION}/spdi/{spdi}/hgvs"
+    return dict(assembly_report_uri=manifest["assembly_report_uri"],
+                assembly_report_sha256=manifest["assembly_report_sha256"],
+                refseq_assembly_accession=manifest["refseq_assembly_accession"],
+                refseq_accession=accession, reference_uri=reference_uri,
+                contextual_uri=contextual_uri, hgvs_uri=hgvs_uri,
+                expected_reference=q.ref, expected_spdi=spdi, expected_hgvs=hgvs)
+
+
+def _observed_reference(record: SourceRecord, fasta: str, accession: str) -> str:
+    lines = fasta.splitlines()
+    position = record.query.position
+    expected_header = f">{accession}:{position}-{position} "
+    if len(lines) != 2 or not lines[0].startswith(expected_header) or not re.fullmatch(r"[ACGT]", lines[1]):
+        raise ReferenceCheckError("NCBI returned an unexpected accession, coordinate, or FASTA sequence")
+    return lines[1]
+
+
+def replay_reference_check(record: SourceRecord, fasta: str, contextual: dict | None,
+                           hgvs_result: dict | None, checked_at: str) -> ReferenceCheck:
+    """Derive observations, flags, hashes, and IDs from preserved responses offline."""
+    metadata = _reference_metadata(record)
+    fasta = fasta.replace("\r\n", "\n").replace("\r", "\n").strip()
+    observed_reference = _observed_reference(record, fasta, metadata["refseq_accession"])
+    reference_matches = observed_reference == record.query.ref == record.reference_base
+    observed_spdi = observed_hgvs = None
+    if reference_matches:
+        if not all(isinstance(value, dict) and isinstance(value.get("data"), dict) for value in (contextual, hgvs_result)):
+            raise ReferenceCheckError("NCBI notation responses are missing or malformed")
+        data = contextual["data"]
+        if all(key in data for key in ("seq_id", "position", "deleted_sequence", "inserted_sequence")):
+            if (not isinstance(data["seq_id"], str) or type(data["position"]) is not int or
+                    not isinstance(data["deleted_sequence"], str) or not isinstance(data["inserted_sequence"], str)):
+                raise ReferenceCheckError("NCBI returned invalid SPDI fields")
+            observed_spdi = f"{data['seq_id']}:{data['position']}:{data['deleted_sequence']}:{data['inserted_sequence']}"
+        observed_hgvs = hgvs_result["data"].get("hgvs")
+        if observed_hgvs is not None and not isinstance(observed_hgvs, str):
+            raise ReferenceCheckError("NCBI returned an invalid HGVS value")
+    elif contextual is not None or hgvs_result is not None:
+        raise ReferenceCheckError("NCBI notation responses must be absent after a reference disagreement")
+    spdi_matches = observed_spdi == metadata["expected_spdi"]
+    hgvs_matches = observed_hgvs == metadata["expected_hgvs"]
+    id_ = _sha({"source_record_id": record.id, "checked_at": checked_at,
+                "fasta": fasta, "contextual": contextual, "hgvs": hgvs_result})[:20]
+    return ReferenceCheck(id=id_, source_record_id=record.id,
+        source_response_sha256=record.source_response_sha256, checked_at=checked_at, **metadata,
+        reference_fasta=fasta, contextual_response=contextual, hgvs_response=hgvs_result,
+        reference_fasta_sha256=_sha(fasta), contextual_response_sha256=_sha(contextual) if contextual else None,
+        hgvs_response_sha256=_sha(hgvs_result) if hgvs_result else None,
+        observed_reference=observed_reference, observed_spdi=observed_spdi, observed_hgvs=observed_hgvs,
+        reference_matches=reference_matches, representation_checked=reference_matches,
+        spdi_matches=spdi_matches, hgvs_matches=hgvs_matches,
+        status="agree" if all((reference_matches, spdi_matches, hgvs_matches)) else "disagree")
+
+
+def fetch_reference_check(record: SourceRecord, client: httpx.Client | None = None) -> ReferenceCheck:
+    metadata = _reference_metadata(record)
     owns_client = client is None
     if client is None:
         client = httpx.Client(timeout=20.0, follow_redirects=False)
     try:
-        fasta = _get(client, reference_uri).text.replace("\r\n", "\n").replace("\r", "\n").strip()
-        lines = fasta.splitlines()
-        expected_header = f">{accession}:{q.position}-{q.position} "
-        if len(lines) != 2 or not lines[0].startswith(expected_header) or not re.fullmatch(r"[ACGT]", lines[1]):
-            raise ReferenceCheckError("NCBI returned an unexpected accession, coordinate, or FASTA sequence")
-        observed_reference = lines[1]
-        reference_matches = observed_reference == q.ref == record.reference_base
+        fasta = _get(client, metadata["reference_uri"]).text.replace("\r\n", "\n").replace("\r", "\n").strip()
+        observed_reference = _observed_reference(record, fasta, metadata["refseq_accession"])
+        reference_matches = observed_reference == record.query.ref == record.reference_base
         contextual = hgvs_result = None
-        observed_spdi = observed_hgvs = None
         if reference_matches:
-            contextual = _json(client, contextual_uri, variation=owns_client)
-            hgvs_result = _json(client, hgvs_uri, variation=owns_client)
-            data = contextual["data"]
-            if all(key in data for key in ("seq_id", "position", "deleted_sequence", "inserted_sequence")):
-                observed_spdi = f"{data['seq_id']}:{data['position']}:{data['deleted_sequence']}:{data['inserted_sequence']}"
-            observed_hgvs = hgvs_result["data"].get("hgvs")
-            if observed_hgvs is not None and not isinstance(observed_hgvs, str):
-                raise ReferenceCheckError("NCBI returned an invalid HGVS value")
-        spdi_matches = observed_spdi == spdi
-        hgvs_matches = observed_hgvs == hgvs
-        checked_at = datetime.now(timezone.utc).isoformat()
-        id_ = _sha({"source_record_id": record.id, "checked_at": checked_at,
-                    "fasta": fasta, "contextual": contextual, "hgvs": hgvs_result})[:20]
-        return ReferenceCheck(
-            id=id_, source_record_id=record.id, source_response_sha256=record.source_response_sha256,
-            checked_at=checked_at, assembly_report_uri=manifest["assembly_report_uri"],
-            assembly_report_sha256=manifest["assembly_report_sha256"],
-            refseq_assembly_accession=manifest["refseq_assembly_accession"], refseq_accession=accession,
-            reference_uri=reference_uri, contextual_uri=contextual_uri, hgvs_uri=hgvs_uri,
-            reference_fasta=fasta, contextual_response=contextual, hgvs_response=hgvs_result,
-            reference_fasta_sha256=_sha(fasta), contextual_response_sha256=_sha(contextual) if contextual else None,
-            hgvs_response_sha256=_sha(hgvs_result) if hgvs_result else None, expected_reference=q.ref,
-            observed_reference=observed_reference, expected_spdi=spdi, observed_spdi=observed_spdi,
-            expected_hgvs=hgvs, observed_hgvs=observed_hgvs,
-            reference_matches=reference_matches, representation_checked=reference_matches,
-            spdi_matches=spdi_matches, hgvs_matches=hgvs_matches,
-            status="agree" if all((reference_matches, spdi_matches, hgvs_matches)) else "disagree",
-        )
+            contextual = _json(client, metadata["contextual_uri"], variation=owns_client)
+            hgvs_result = _json(client, metadata["hgvs_uri"], variation=owns_client)
+        return replay_reference_check(record, fasta, contextual, hgvs_result, datetime.now(timezone.utc).isoformat())
     finally:
         if owns_client:
             client.close()

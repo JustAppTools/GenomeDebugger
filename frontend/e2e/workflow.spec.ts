@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { readFile, stat } from 'node:fs/promises'
 
 test('demo, evidence, regression, and portable bundle work through the browser', async ({ page }) => {
   await page.goto('/')
@@ -57,4 +58,87 @@ test('offline and empty public cache states explain the failure', async ({ page 
   await page.getByRole('button', { name: 'Public source' }).click()
   await page.getByRole('button', { name: 'Load cached' }).click()
   await expect(page.getByRole('alert')).toContainText('No local Ensembl record is cached')
+})
+
+test('malformed JSON stays editable and guided input supports multiple variants',async({page})=>{
+  const demo = await (await page.request.get('/api/demos/transcript-switch')).json()
+  demo.snapshots[0].variant.reference_context.sequence = 123
+  await page.goto('/')
+  await page.getByRole('button',{name:'Snapshot input'}).click()
+  await page.getByRole('button',{name:'JSON editor',exact:true}).click()
+  const malformed = JSON.stringify(demo)
+  await page.getByLabel('Investigation JSON').fill(malformed)
+  await page.getByRole('button',{name:'Guided form',exact:true}).click()
+  await expect(page.getByRole('alert')).toContainText('sequence must be text')
+  await expect(page.getByLabel('Investigation JSON')).toHaveValue(malformed)
+  demo.snapshots[0].variant.reference_context.sequence = 'GACGTACG'
+  await page.getByLabel('Investigation JSON').fill(JSON.stringify(demo))
+  await page.getByRole('button',{name:'Guided form',exact:true}).click()
+  for (const [side,index] of [['A',1],['B',2]] as const) {
+    await page.getByRole('button',{name:`Add variant to analysis ${side}`,exact:true}).click()
+    const prefix = `Analysis ${index} variant 2`
+    await page.getByLabel(`${prefix} position`,{exact:true}).fill('104')
+    await page.getByLabel(`${prefix} reference`,{exact:true}).fill('T')
+    await page.getByLabel(`${prefix} alternate`,{exact:true}).fill('G')
+    await page.getByLabel(`${prefix} annotation 1 gene id`,{exact:true}).fill('G2')
+    await page.getByLabel(`${prefix} annotation 1 transcript id`,{exact:true}).fill('T2')
+    await page.getByLabel(`${prefix} annotation 1 consequence`,{exact:true}).fill('intron_variant')
+  }
+  await expect(page.getByRole('button',{name:'Compare analyses'})).toBeEnabled()
+  await page.getByRole('button',{name:'Compare analyses'}).click()
+  await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
+  await expect(page.getByText('0 additional annotations · 1 additional variants',{exact:true})).toHaveCount(2)
+})
+
+test('a bundle larger than the input limit downloads and reimports',async({page})=>{
+  const input = await (await page.request.get('/api/demos/transcript-switch')).json()
+  input.title = 'Large bundle round trip'
+  input.snapshots.forEach((snapshot:{annotations:unknown},side:number)=>{
+    snapshot.annotations = Array.from({length:500},(_,i)=>({gene_id:'BIG',transcript_id:`T${i}`,consequence:(side?'B':'A').repeat(500)}))
+  })
+  const created = await page.request.post('/api/investigations',{data:input})
+  expect(created.ok()).toBe(true)
+  await page.goto('/')
+  await page.getByRole('button',{name:'Saved records'}).click()
+  await page.getByLabel('Search investigations').fill(input.title)
+  await page.locator('.library-row').filter({hasText:input.title}).getByRole('button',{name:'Open',exact:true}).click()
+  const promise = page.waitForEvent('download')
+  await page.getByRole('button',{name:'Bundle',exact:true}).click()
+  const file = await (await promise).path()
+  expect((await stat(file!)).size).toBeGreaterThan(1_000_000)
+  await page.getByRole('button',{name:'Saved records'}).click()
+  await page.getByLabel('Import replay-checked bundle').setInputFiles(file!)
+  await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+test('historical output import compares two preserved artifacts and bundles both',async({page})=>{
+  const fixture=JSON.parse(await readFile('../fixtures/snpeff-mane-public-run.json','utf8'))
+  const raw=JSON.stringify([fixture.source.source_response])
+  await page.goto('/')
+  await page.getByRole('button',{name:'Public source',exact:true}).click()
+  await page.getByText('Import historical VEP output',{exact:true}).click()
+  await page.getByLabel('Historical VEP JSON file').setInputFiles({name:'historical-fixture.json',mimeType:'application/json',buffer:Buffer.from(raw)})
+  await page.getByLabel('Historical Ensembl release').fill('110')
+  await page.getByLabel('Historical VEP version').fill('110-ui-fixture')
+  await page.getByLabel('Historical run time').fill('2024-01-01T12:00')
+  await page.getByLabel('Historical artifact source').fill('UI fixture; not a historical biological assertion')
+  await page.getByRole('button',{name:'Preserve historical output',exact:true}).click()
+  await expect(page.getByRole('status')).toContainText('Historical output preserved')
+  const changed=structuredClone(fixture.source.source_response)
+  changed.transcript_consequences[0].consequence_terms=['missense_variant']
+  const imported=await page.request.post('/api/sources/historical-vep',{data:{query:fixture.source.query,
+    raw_json:JSON.stringify([changed]),source_release:111,tool_version:'111-ui-fixture',generated_at:'2025-01-01T12:00:00Z',
+    assembly_accession:fixture.source.assembly_accession,source_uri:'UI fixture; changed consequence'}})
+  expect(imported.ok()).toBe(true)
+  await page.getByRole('button',{name:'Load preserved sources',exact:true}).click()
+  await expect(page.getByLabel('Preserved analysis 1 source')).toHaveValue((await imported.json()).id)
+  await page.getByRole('button',{name:'Compare preserved sources',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
+  const promise=page.waitForEvent('download')
+  await page.getByRole('button',{name:'Bundle',exact:true}).click()
+  const file=await (await promise).path()
+  const bundle=JSON.parse(await readFile(file!,'utf8'))
+  expect(bundle.entries.source_records).toHaveLength(2)
+  expect((await page.request.post('/api/bundles/verify',{data:bundle})).ok()).toBe(true)
 })

@@ -227,6 +227,7 @@ class IdentityResult(StrictModel):
 
 class InvestigationResult(StrictModel):
     id: str
+    engine_version: str = "0.5.0"
     input: InvestigationInput
     identity: IdentityResult
     differences: list[Difference]

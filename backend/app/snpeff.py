@@ -28,6 +28,23 @@ class ConsequenceMatch(StrictModel):
     agrees: bool
 
 
+class SnpEffExecution(StrictModel):
+    started_at: str
+    elapsed_seconds: float
+    command: list[str]
+    java_sha256: str
+    jar_sha256: str
+    config_sha256: str
+    database_files: dict[str, str]
+    database_sha256: str
+    input_vcf: str
+    input_vcf_sha256: str
+    output_vcf_sha256: str
+    stderr: str
+    software_version: str
+    artifact_sources: dict[str,str] = Field(default_factory=dict)
+
+
 class SnpEffCheck(StrictModel):
     id: str
     source_record_id: str
@@ -43,6 +60,7 @@ class SnpEffCheck(StrictModel):
     unmatched_ensembl: list[str]
     unmatched_snpeff: list[str]
     explanation: str
+    execution: SnpEffExecution | None = None
 
 
 def compare_snpeff(record: SourceRecord, request: SnpEffCheckRequest) -> SnpEffCheck:

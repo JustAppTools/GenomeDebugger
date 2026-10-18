@@ -6,19 +6,25 @@ from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .engine import compare
+from .allele_check import fetch_allele_check
+from .limits import MAX_BUNDLE_BYTES, MAX_INPUT_BYTES
 from .ensembl import PUBLIC_EXAMPLE, CompareTranscripts, SourceError, SourceLookup, SourceLookupResult, SourceRecord, comparison_input, fetch_record
 from .models import AnnotationCheckSummary, InvestigationInput, InvestigationResult, ReferenceCheckSummary
 from .ncbi import ReferenceCheck, ReferenceCheckError, ReferenceCheckRequest, ReferenceCheckResult, fetch_reference_check
 from .regression import CreateRegressionCase, RegressionCase, RegressionRun, RegressionRunRequest, create_case, run_case
 from .report import markdown_report
 from .snpeff import SnpEffCheck, SnpEffCheckRequest, compare_snpeff
+from .snpeff_runner import runtime_status, run_snpeff
+from .historical import HistoricalImport, SourcePair, import_historical, comparison_pair
 from .bundle import ENGINE_VERSION, create_bundle, verify_bundle
 from .storage import list_items, load, save, save_case, load_case, list_cases, save_run, load_run, list_runs, save_source_record, load_source_record, latest_source_record, save_reference_check, latest_reference_check, load_reference_check, delete_investigation, initialize, StorageLimitError, RecordConflictError, save_snpeff_check, latest_snpeff_check
+from .storage import save_allele_check, latest_allele_check
+from .storage import list_source_records
 
 BASE = Path(__file__).resolve().parents[2]
 DEMO = BASE / "fixtures" / "transcript-switch.json"
 DB = Path(os.environ.get("GENOMEDEBUGGER_DB", str(BASE / "data" / "investigations.db")))
-app = FastAPI(title="GenomeDebugger", version=ENGINE_VERSION, description="Local genomic discrepancy investigation with optional Ensembl and NCBI checks and user supplied SnpEff output comparison")
+app = FastAPI(title="GenomeDebugger", version=ENGINE_VERSION, description="Local genomic discrepancy investigation with preserved VEP sources, NCBI allele checks, and optional pinned local SnpEff execution")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type"])
 
 
@@ -42,15 +48,20 @@ async def limit_input(request: Request, call_next):
     if not local:
         return JSONResponse(status_code=403, content={"detail": "GenomeDebugger accepts local connections only"})
     if request.method == "POST":
-        limit = 1_000_000
-        if int(request.headers.get("content-length", "0")) > limit:
-            return JSONResponse(status_code=413, content={"detail": "Input exceeds 1 MB limit"})
+        limit = MAX_BUNDLE_BYTES if request.url.path in {"/api/bundles/verify", "/api/bundles/import"} else MAX_INPUT_BYTES
+        detail = "Bundle exceeds 32 MB limit" if limit == MAX_BUNDLE_BYTES else "Input exceeds 1 MB limit"
+        try:
+            declared_size = int(request.headers.get("content-length", "0"))
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
+        if declared_size > limit:
+            return JSONResponse(status_code=413, content={"detail": detail})
         chunks = []
         size = 0
         async for chunk in request.stream():
             size += len(chunk)
             if size > limit:
-                return JSONResponse(status_code=413, content={"detail": "Input exceeds 1 MB limit"})
+                return JSONResponse(status_code=413, content={"detail": detail})
             chunks.append(chunk)
         request._body = b"".join(chunks)
     return await call_next(request)
@@ -62,12 +73,62 @@ def health():
         initialize(DB)
     except (OSError, sqlite3.Error) as exc:
         raise HTTPException(status_code=503, detail="Local database unavailable") from exc
-    return {"status": "ok", "version": ENGINE_VERSION}
+    return {"status": "ok", "version": ENGINE_VERSION,
+            "limits": {"input_bytes": MAX_INPUT_BYTES, "bundle_bytes": MAX_BUNDLE_BYTES}}
 
 
 @app.get("/api/sources/ensembl/example")
 def ensembl_example():
     return PUBLIC_EXAMPLE
+
+
+@app.get("/api/tools/snpeff")
+def snpeff_runtime():
+    return runtime_status()
+
+
+@app.get("/api/sources/records")
+def preserved_sources():
+    return [{**record.model_dump(exclude={"source_response","artifact"}),
+             "artifact":{key:value for key,value in record.artifact.items() if key!="text"} if record.artifact else None}
+            for record in list_source_records(DB)]
+
+
+@app.post("/api/sources/historical-vep",response_model=SourceRecord)
+def historical_vep(payload: HistoricalImport):
+    try:
+        record=import_historical(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422,detail=str(exc)) from exc
+    save_source_record(DB,record)
+    return record
+
+
+@app.post("/api/sources/compare",response_model=InvestigationResult)
+def compare_source_records(payload: SourcePair):
+    left=load_source_record(DB,payload.source_a)
+    right=load_source_record(DB,payload.source_b)
+    if left is None or right is None:
+        raise HTTPException(status_code=404,detail="Both preserved source records must exist")
+    try:
+        result=compare(comparison_pair(left,right,payload))
+    except ValueError as exc:
+        raise HTTPException(status_code=422,detail=str(exc)) from exc
+    save(DB,result)
+    return result
+
+
+@app.post("/api/sources/ensembl/records/{id_}/snpeff-run",response_model=SnpEffCheck)
+def snpeff_local_run(id_: str):
+    record=load_source_record(DB,id_)
+    if record is None:
+        raise HTTPException(status_code=404,detail="Source record not found")
+    try:
+        check=run_snpeff(record)
+    except (ValueError,OSError,KeyError) as exc:
+        raise HTTPException(status_code=422,detail=str(exc)) from exc
+    save_snpeff_check(DB,check)
+    return check
 
 
 @app.post("/api/sources/ensembl/lookup", response_model=SourceLookupResult)
@@ -163,6 +224,9 @@ def compare_ensembl_transcripts(id_: str, payload: CompareTranscripts):
             database_sha256=annotation.database_sha256, status=annotation.status,
             matched_transcripts=len(annotation.matches)) if annotation else None
         investigation_input = comparison_input(record, payload, summary, annotation_summary)
+        if annotation:
+            for snapshot in investigation_input.snapshots:
+                snapshot.provenance.configuration["annotation_check_origin"] = "local_execution" if annotation.execution else "user_supplied"
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     result = compare(investigation_input)
@@ -195,6 +259,24 @@ def investigation(id_: str):
     return result
 
 
+@app.post("/api/investigations/{id_}/allele-check")
+def check_investigation_alleles(id_: str, payload: ReferenceCheckRequest):
+    result = load(DB, id_)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+    if payload.mode == "cache_only":
+        check = latest_allele_check(DB, id_)
+        if check is None:
+            raise HTTPException(status_code=404, detail="No reference-backed allele check is saved for this investigation")
+        return check
+    try:
+        check = fetch_allele_check(result)
+    except (ReferenceCheckError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    save_allele_check(DB, check)
+    return check
+
+
 @app.delete("/api/investigations/{id_}")
 def remove_investigation(id_: str):
     try:
@@ -220,28 +302,30 @@ def investigation_bundle(id_: str):
 @app.post("/api/bundles/verify")
 def bundle_verify(payload: dict):
     try:
-        result, source, check, snpeff = verify_bundle(payload)
+        result, source, check, snpeff, allele_check = verify_bundle(payload)
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"valid": True, "investigation_id": result.id, "has_source_record": source is not None, "has_reference_check": check is not None, "has_snpeff_check": snpeff is not None}
+    return {"valid": True, "investigation_id": result.id, "has_source_record": bool(source), "has_reference_check": check is not None, "has_snpeff_check": snpeff is not None, "has_allele_check":allele_check is not None}
 
 
 @app.post("/api/bundles/import")
 def bundle_import(payload: dict):
     try:
-        result, source, check, snpeff = verify_bundle(payload)
+        result, source, check, snpeff, allele_check = verify_bundle(payload)
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     existing = load(DB, result.id)
     if existing is not None and existing != result:
         raise HTTPException(status_code=409, detail="An investigation with this input ID already has a different saved result")
-    if source:
-        save_source_record(DB, source)
+    for record in source:
+        save_source_record(DB, record)
     if check:
         save_reference_check(DB, check)
     if snpeff:
         save_snpeff_check(DB, snpeff)
     save(DB, result)
+    if allele_check:
+        save_allele_check(DB, allele_check)
     return {"imported": result.id}
 
 
@@ -250,7 +334,7 @@ def report(id_: str):
     result = load(DB, id_)
     if result is None:
         raise HTTPException(status_code=404, detail="Investigation not found")
-    return markdown_report(result)
+    return markdown_report(result,latest_allele_check(DB,result.id))
 
 
 @app.post("/api/investigations/{id_}/regression-cases", response_model=RegressionCase)
