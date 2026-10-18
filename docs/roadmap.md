@@ -1,6 +1,6 @@
 # Roadmap
 
-## Completed through application 0.7.0 / comparator 0.6.3
+## Completed through application 0.7.1 / comparator 0.6.3
 
 - Strict snapshot/provenance schema, conservative local comparison, condition-aware clinical comparisons, evidence-linked synthetic replay, meaningful-change overrides, and offline demo.
 - Guided primary and additional variant/annotation editing, advanced JSON, saved-record search and retention, evidence inspection, regression workbench, JSON/Markdown exports, backend status, and Windows startup.
@@ -14,7 +14,8 @@
 
 - Fixed all 14 findings in the October 18 audit, with focused backend and browser regression coverage, atomic imports, immutable artifact conflicts, exact execution bytes, assembly validation, storage recovery, draft/query freshness, clinical dates, manifest validation, pagination, and guided defaults.
 - Fixed the subsequent 0.6.1 and 0.6.2 audit findings, including check applicability, primary collection matching, execution origin, complete source ingestion, save-time validation, and record/selection races.
-- Added three playable synthetic mysteries with evidence-checked hypotheses, local progress, and explicit workbench saving. Added a recorded comparison replay with manual steps, playback, evidence links, and automatic pauses at observed differences.
+- Plain-language onboarding, a three-question results summary, optional definitions and technical disclosures, and simpler navigation. Removed the game-oriented interface and animated playback.
+
 
 ## Further development
 

@@ -1,24 +1,21 @@
 # Current state - 2026-10-18
 
-Application version 0.7.0 adds the Mystery Lab and recorded analysis replay. Comparator engine 0.6.3 is unchanged; earlier fixes remain covered by the test suite.
+Application version 0.7.1 removes game-oriented features and simplifies the main workflow for a broader audience. Comparator engine 0.6.3 is unchanged.
 
 ## Verification
 
-- Backend: 146 tests passed. Frontend: 27 tests passed. Browser workflows: 19 passed, including all three mystery hypotheses/retries, browser progress, workbench/bundle export, automatic replay pauses, mobile layout, and reduced motion.
+- Backend: 139 tests passed. Frontend: 27 tests passed. Browser workflows: 18 passed.
 - TypeScript/Vite production build passes.
-- All 10 currently saved investigation exports verify under the current engine; both existing pinned regression baselines pass. Compatibility checks used a temporary database copy and left the original bytes unchanged.
-- Application and comparator versions are now distinct. `/api/health.version` remains the comparator version; `app_version` reports 0.7.0. Existing archive verification and result IDs remain unchanged.
-- This release uses captured scientific fixtures and simulated malformed responses; no new live upstream scientific observations are claimed. The actual pinned SnpEff fixture remains unresolved because transcript versions do not match exactly.
+- Browser coverage includes the simpler welcome screen, plain-language summaries, optional terms and technical details, guided input on mobile, and the existing source, storage, export, and regression workflows.
+- Application and comparator versions remain distinct: `/api/health.version` is the comparator version and `app_version` is 0.7.1. Archive verification and result IDs are unchanged.
 
-## New functionality
+## Changes
 
-1. Three synthetic mystery fixtures teach missing transcript coverage, padded equivalent substitutions, and limits on release-related causal claims.
-2. Each hypothesis is checked against fresh comparator output; changed fixtures cannot retain a canned success. Practice performs no database writes or upstream requests.
-3. Case files, clues, retryable hypotheses, evidence inspection, and browser-local completion tracking are available in Mystery Lab.
-4. Explicit workbench saving uses the normal comparison endpoint. All cases export/replay and support pinned regression tests.
-5. Recorded replay appears in cases and ordinary overviews: Input → Reference → Transcript → Consequence → Comparison. Playback pauses at observed differences, supports manual navigation, and respects reduced motion.
-6. Desktop and mobile layouts were inspected visually. Clinical classifications and independently authenticated observations are not inferred from these synthetic lessons.
+1. Removed the Mystery Lab, its API endpoints, fictional lesson fixtures, quiz/progress UI, and animation controls. Obsolete browser progress is cleared when the app opens.
+2. The welcome screen explains the purpose and offers two actions: try an example or enter analysis results.
+3. The default result summary explains whether supplied edits match, what changed, and whether a cause is demonstrated. Local identity and synthetic evidence are not upgraded to independently authenticated or clinical claims.
+4. A glossary explains variant, transcript, predicted effect, source version, and supporting details. Detailed records and original engine findings are available in an expandable technical section.
+5. Navigation and common field labels use clearer wording. Original field identifiers remain available for auditability; comparison importance is explicitly distinguished from medical significance.
+6. Existing scientific, source-integrity, storage, and freshness fixes remain covered. The original example is a practical demonstration with fabricated data.
 
-The six prior audit repairs remain documented in `docs/bug-audit-0.6.2-2026-10-18.md`. Full pipeline execution replay, an evidence graph, chromosome exploration, and additional lesson authoring remain future work.
-
-Scientific boundaries remain in `docs/scientific-validity.md`. Cross-assembly mapping, full historical pipeline reproduction, VRS, and clinical interpretation remain outside the current implementation.
+Scientific boundaries remain in `docs/scientific-validity.md`. Raw sequencing interpretation, diagnosis, full historical pipeline execution, cross-assembly mapping, VRS, and clinical interpretation remain outside the current implementation.
