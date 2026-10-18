@@ -1,0 +1,38 @@
+[
+  {
+    "id": "padded-substitution",
+    "basis": "synthetic representation pair",
+    "expected": "verified",
+    "a": {"assembly":"GRCh38","sequence_id":"NC_000001.11","position":101,"ref":"AC","alt":"AT","reference_context":{"start":100,"sequence":"GACGTACG"}},
+    "b": {"assembly":"GRCh38","sequence_id":"NC_000001.11","position":102,"ref":"C","alt":"T","reference_context":{"start":100,"sequence":"GACGTACG"}}
+  },
+  {
+    "id": "repeat-deletion-shift",
+    "basis": "synthetic local reference context; external assembly sequence not asserted",
+    "expected": "unresolved",
+    "a": {"assembly":"GRCh38","sequence_id":"NC_000001.11","position":101,"ref":"AA","alt":"A","reference_context":{"start":100,"sequence":"AAAAAA"}},
+    "b": {"assembly":"GRCh38","sequence_id":"NC_000001.11","position":102,"ref":"AA","alt":"A","reference_context":{"start":100,"sequence":"AAAAAA"}}
+  },
+  {
+    "id": "different-alleles",
+    "basis": "synthetic negative control",
+    "expected": "rejected",
+    "a": {"assembly":"GRCh38","sequence_id":"NC_000001.11","position":102,"ref":"C","alt":"T","reference_context":{"start":100,"sequence":"GACGTACG"}},
+    "b": {"assembly":"GRCh38","sequence_id":"NC_000001.11","position":102,"ref":"C","alt":"G","reference_context":{"start":100,"sequence":"GACGTACG"}}
+  },
+  {
+    "id": "cross-assembly",
+    "basis": "synthetic unresolved control; coordinate equality is insufficient",
+    "expected": "unresolved",
+    "a": {"assembly":"GRCh38","sequence_id":"NC_000001.11","position":102,"ref":"C","alt":"T","reference_context":{"start":100,"sequence":"GACGTACG"}},
+    "b": {"assembly":"GRCh37","sequence_id":"NC_000001.10","position":102,"ref":"C","alt":"T","reference_context":{"start":100,"sequence":"GACGTACG"}}
+  },
+  {
+    "id": "public-vep-example",
+    "basis": "Ensembl VEP region API documented example, allele only; no independent consequence assertion",
+    "source": "https://rest.ensembl.org/documentation/info/vep_region_get",
+    "expected": "verified",
+    "a": {"assembly":"GRCh38","sequence_id":"1","position":6524705,"ref":"C","alt":"T","reference_context":{"start":6524705,"sequence":"C"}},
+    "b": {"assembly":"GRCh38","sequence_id":"1","position":6524705,"ref":"C","alt":"T","reference_context":{"start":6524705,"sequence":"C"}}
+  }
+]

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.engine import compare
-from app.models import InvestigationInput
+from app.models import InvestigationInput, VariantRecord
 from app.regression import create_case, run_case
 
 
@@ -67,6 +67,20 @@ def test_candidate_cannot_change_tested_allele():
     candidate = case.source_investigation.input.model_copy(deep=True)
     candidate.snapshots[0].variant.alt = "AG"
     with pytest.raises(ValueError, match="tested variant"):
+        run_case(case, candidate)
+
+
+def test_candidate_cannot_change_additional_tested_variant():
+    source = baseline()
+    extra = {"variant":{"assembly":"GRCh38","sequence_id":"NC_000001.11","position":104,
+                        "ref":"T","alt":"G","reference_context":{"start":100,"sequence":"GACGTACG"}},
+             "annotations":[{"gene_id":"GENE2","transcript_id":"TX2","consequence":"intron_variant"}]}
+    for snapshot in source.input.snapshots:
+        snapshot.variant_records = [VariantRecord.model_validate(extra)]
+    case = create_case(compare(source.input), "Additional variant")
+    candidate = case.source_investigation.input.model_copy(deep=True)
+    candidate.snapshots[1].variant_records[0].variant.position = 105
+    with pytest.raises(ValueError, match="additional variants"):
         run_case(case, candidate)
 
 

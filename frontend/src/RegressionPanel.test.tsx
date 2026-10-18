@@ -25,9 +25,7 @@ test('saves a case, passes pinned replay, then shows a candidate failure', async
   expect(await screen.findByText('SAVED CASE')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:'Run pinned baseline'}))
   expect(await screen.findByText('Regression passed')).toBeInTheDocument()
-  const candidate = JSON.parse(JSON.stringify(input))
-  candidate.snapshots[1].annotation.consequence = 'synonymous_variant'
-  fireEvent.change(screen.getByLabelText('Candidate input JSON'), {target:{value:JSON.stringify(candidate)}})
+  fireEvent.change(screen.getByLabelText('Candidate analysis 2 consequence'), {target:{value:'synonymous_variant'}})
   fireEvent.click(screen.getByRole('button',{name:'Check candidate'}))
   expect(await screen.findByText('Regression failed')).toBeInTheDocument()
   expect(screen.getAllByText('snapshots[1].annotation.consequence').length).toBeGreaterThan(0)

@@ -51,6 +51,27 @@ class Annotation(StrictModel):
     clinical: ClinicalAssertion | None = None
 
 
+def annotation_key(row: Annotation) -> tuple[str, str, str | None, str | None]:
+    return (row.gene_id, row.transcript_id, row.clinical.framework if row.clinical else None,
+            row.clinical.condition_id if row.clinical else None)
+
+
+def variant_key(variant: Variant) -> tuple[str, str, int, str, str]:
+    return variant.assembly, variant.sequence_id, variant.position, variant.ref, variant.alt
+
+
+class VariantRecord(StrictModel):
+    variant: Variant
+    annotations: list[Annotation] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def unique_annotations(self):
+        keys = [annotation_key(row) for row in self.annotations]
+        if len(keys) != len(set(keys)):
+            raise ValueError("variant record annotation rows must be unique")
+        return self
+
+
 class Provenance(StrictModel):
     tool: str = Field(min_length=1, max_length=100)
     tool_version: str = Field(min_length=1, max_length=100)
@@ -66,7 +87,20 @@ class Snapshot(StrictModel):
     label: str = Field(min_length=1, max_length=150)
     variant: Variant
     annotation: Annotation
+    annotations: list[Annotation] = Field(default_factory=list, max_length=1000, description="Additional annotation rows for this variant")
+    variant_records: list[VariantRecord] = Field(default_factory=list, max_length=50, description="Additional variants and their annotation rows")
     provenance: Provenance
+
+    @model_validator(mode="after")
+    def unique_annotation_rows(self):
+        rows = [self.annotation, *self.annotations]
+        keys = [annotation_key(row) for row in rows]
+        if len(keys) != len(set(keys)):
+            raise ValueError("annotation rows must have unique gene, transcript, and clinical context")
+        variants = [variant_key(self.variant), *(variant_key(record.variant) for record in self.variant_records)]
+        if len(variants) != len(set(variants)):
+            raise ValueError("snapshot variants must have unique assembly, accession, position, and alleles")
+        return self
 
 
 class LookupRow(StrictModel):
@@ -113,12 +147,26 @@ class ReferenceCheckSummary(StrictModel):
         return self
 
 
+class AnnotationCheckSummary(StrictModel):
+    id: str
+    source_record_id: str
+    source_response_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    vcf_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    snpeff_version: str
+    genome_database: str
+    database_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    status: Literal["agree", "disagree", "unresolved"]
+    matched_transcripts: int = Field(ge=0)
+
+
 class InvestigationInput(StrictModel):
     title: str = Field(min_length=1, max_length=200)
     synthetic: bool = False
     snapshots: list[Snapshot] = Field(min_length=2, max_length=2)
     controlled_lookup: ControlledLookup | None = None
     reference_check: ReferenceCheckSummary | None = None
+    annotation_check: AnnotationCheckSummary | None = None
+    meaningful_overrides: dict[str, bool] = Field(default_factory=dict, max_length=100)
 
     @model_validator(mode="after")
     def unique_ids(self):
@@ -126,6 +174,8 @@ class InvestigationInput(StrictModel):
             raise ValueError("snapshot IDs must differ")
         if self.controlled_lookup and not self.synthetic:
             raise ValueError("synthetic lookup requires synthetic=true")
+        if any(not key or len(key) > 200 for key in self.meaningful_overrides):
+            raise ValueError("meaningful override field names must be 1–200 characters")
         if self.reference_check:
             check = self.reference_check
             for snapshot in self.snapshots:
@@ -135,6 +185,11 @@ class InvestigationInput(StrictModel):
                     raise ValueError("reference check source record does not match snapshot")
                 if snapshot.provenance.input_sha256 != check.source_response_sha256:
                     raise ValueError("reference check source hash does not match snapshot")
+        if self.annotation_check:
+            check = self.annotation_check
+            for snapshot in self.snapshots:
+                if snapshot.provenance.configuration.get("source_record_id") != check.source_record_id or snapshot.provenance.input_sha256 != check.source_response_sha256:
+                    raise ValueError("annotation check source record or hash does not match snapshot")
         return self
 
 

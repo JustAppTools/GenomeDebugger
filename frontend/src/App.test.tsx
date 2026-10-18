@@ -18,12 +18,30 @@ test('loads a demo, compares snapshots, and opens replay evidence', async () => 
   vi.stubGlobal('fetch',fetchMock)
   render(<App />)
   fireEvent.click(screen.getAllByRole('button',{name:/load synthetic demo/i})[0])
-  expect(await screen.findByLabelText('Investigation JSON')).toHaveValue(JSON.stringify(demo,null,2))
-  fireEvent.click(screen.getByRole('button',{name:'Compare'}))
+  expect(await screen.findByText('Controlled replay matches.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'Snapshot JSON'}))
+  expect(screen.getByLabelText('Investigation JSON')).toHaveValue(JSON.stringify(demo,null,2))
+  fireEvent.change(screen.getByLabelText('Investigation JSON'), {target:{value:'{'}})
+  expect(screen.getByRole('status')).toHaveTextContent('The snapshot JSON has changed')
+  expect(screen.getByRole('button',{name:'Compare'})).toBeDisabled()
+  fireEvent.click(screen.getByRole('button',{name:'Run demo'}))
   expect(await screen.findByText('Controlled replay matches.')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:/view test/i}))
   expect(await screen.findByText('Deterministic lookup replay')).toBeInTheDocument()
-  expect(fetchMock).toHaveBeenCalledTimes(3)
+  expect(fetchMock).toHaveBeenCalledTimes(6)
+})
+
+test('shows a useful error and leaves demo input editable if comparison fails', async () => {
+  const demo = {title:'Synthetic test',synthetic:true,snapshots:[]}
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options?: {method?: string}) => {
+    if (url === '/api/investigations' && options?.method !== 'POST') return {ok:true,json:async()=>[]}
+    if (url === '/api/demos/transcript-switch') return {ok:true,json:async()=>demo}
+    return {ok:false,status:503}
+  }))
+  render(<App />)
+  fireEvent.click(screen.getAllByRole('button',{name:/load synthetic demo/i})[0])
+  expect(await screen.findByRole('alert')).toHaveTextContent('Demo comparison failed (503)')
+  expect(screen.getByLabelText('Investigation JSON')).toHaveValue(JSON.stringify(demo,null,2))
 })
 
 test('reopens a persisted investigation from the recent list', async () => {
@@ -38,5 +56,5 @@ test('reopens a persisted investigation from the recent list', async () => {
   render(<App />)
   fireEvent.click(await screen.findByRole('button',{name:/saved discrepancy saved1/i}))
   expect(await screen.findByText('Alleles match')).toBeInTheDocument()
-  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(fetchMock).toHaveBeenCalledTimes(3)
 })

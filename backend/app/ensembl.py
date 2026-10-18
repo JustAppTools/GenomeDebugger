@@ -10,7 +10,7 @@ from typing import Literal
 import httpx
 from pydantic import Field, ValidationError, model_validator
 
-from .models import Annotation, InvestigationInput, Provenance, ReferenceCheckSummary, ReferenceContext, Snapshot, StrictModel, Variant
+from .models import Annotation, AnnotationCheckSummary, InvestigationInput, Provenance, ReferenceCheckSummary, ReferenceContext, Snapshot, StrictModel, Variant
 
 BASE_URL = "https://rest.ensembl.org"
 PUBLIC_EXAMPLE = {"chromosome": "1", "position": 6524705, "ref": "C", "alt": "T"}
@@ -158,7 +158,8 @@ def fetch_record(query: SourceQuery, client: httpx.Client | None = None) -> Sour
 
 
 def comparison_input(record: SourceRecord, selection: CompareTranscripts,
-                     reference_check: ReferenceCheckSummary | None = None) -> InvestigationInput:
+                     reference_check: ReferenceCheckSummary | None = None,
+                     annotation_check: AnnotationCheckSummary | None = None) -> InvestigationInput:
     rows = {row.transcript_id: row for row in record.transcripts}
     if selection.transcript_a not in rows or selection.transcript_b not in rows:
         raise ValueError("selected transcript was not present in the cached record")
@@ -171,6 +172,9 @@ def comparison_input(record: SourceRecord, selection: CompareTranscripts,
     if reference_check:
         configuration.update({"reference_check_id": reference_check.id,
                               "reference_check_status": reference_check.status})
+    if annotation_check:
+        configuration.update({"annotation_check_id": annotation_check.id,
+                              "annotation_check_status": annotation_check.status})
     provenance = Provenance(tool="Ensembl VEP REST", tool_version="not reported by API",
                             source_name="Ensembl", source_release=source_release,
                             source_uri=record.source_uri, input_sha256=record.source_response_sha256,
@@ -178,9 +182,15 @@ def comparison_input(record: SourceRecord, selection: CompareTranscripts,
     snapshots = []
     for side, transcript_id in (("a", selection.transcript_a), ("b", selection.transcript_b)):
         row = rows[transcript_id]
+        other_rows = [Annotation(gene_id=other.gene_id, transcript_id=other.transcript_id,
+                                 consequence=";".join(other.consequence_terms),
+                                 protein_consequence=other.protein_consequence)
+                      for other in record.transcripts if other.transcript_id != transcript_id]
         snapshots.append(Snapshot(id=f"{record.id}-{side}", label=f"Ensembl VEP {transcript_id}",
                                   variant=variant, annotation=Annotation(gene_id=row.gene_id,
                                   transcript_id=row.transcript_id, consequence=";".join(row.consequence_terms),
-                                  protein_consequence=row.protein_consequence), provenance=provenance))
+                                  protein_consequence=row.protein_consequence), annotations=other_rows,
+                                  provenance=provenance))
     return InvestigationInput(title=f"Current Ensembl transcript comparison: {q.chromosome}:{q.position} {q.ref}>{q.alt}",
-                              synthetic=False, snapshots=snapshots, reference_check=reference_check)
+                              synthetic=False, snapshots=snapshots, reference_check=reference_check,
+                              annotation_check=annotation_check)

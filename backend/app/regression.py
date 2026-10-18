@@ -9,7 +9,7 @@ from uuid import uuid4
 from pydantic import Field
 
 from .engine import compare, digest
-from .models import InvestigationInput, InvestigationResult, StrictModel
+from .models import InvestigationInput, InvestigationResult, StrictModel, variant_key
 
 
 class RegressionCase(StrictModel):
@@ -89,6 +89,10 @@ def run_case(case: RegressionCase, candidate: InvestigationInput | None = None) 
         for index, (expected, actual) in enumerate(zip(baseline.input.snapshots, candidate.snapshots)):
             if expected.variant != actual.variant:
                 raise ValueError(f"Candidate snapshot {index + 1} changes the tested variant; submit the same variant representation")
+            expected_variants = {variant_key(row.variant) for row in expected.variant_records}
+            actual_variants = {variant_key(row.variant) for row in actual.variant_records}
+            if expected_variants != actual_variants:
+                raise ValueError(f"Candidate snapshot {index + 1} changes the tested additional variants")
     actual_result = compare(supplied)
     checks: list[RegressionCheck] = []
 

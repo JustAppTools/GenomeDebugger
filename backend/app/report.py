@@ -34,5 +34,8 @@ def markdown_report(result: InvestigationResult) -> str:
         check_id = a.provenance.configuration.get("reference_check_id")
         if check_id:
             lines.extend([f"Linked NCBI allele check: `{check_id}` ({a.provenance.configuration.get('reference_check_status', 'status unknown')}). Retrieve its preserved responses at `/api/sources/reference-checks/{check_id}`. This does not validate VEP consequences.", ""])
+        annotation_id = a.provenance.configuration.get("annotation_check_id")
+        if annotation_id:
+            lines.extend([f"Linked user-supplied SnpEff ANN check: `{annotation_id}` ({a.provenance.configuration.get('annotation_check_status', 'status unknown')}). This compares two outputs but does not authenticate the SnpEff run or establish causation.", ""])
     lines.extend(["This report is for research and quality assurance; it is not a clinical interpretation.", ""])
     return "\n".join(lines)

@@ -90,11 +90,45 @@ def test_identity_symmetry_and_trim_idempotence():
     assert simple_edit(trimmed) == (pos, ref, alt)
 
 
-def test_indel_in_repeat_is_unresolved():
+def test_indel_in_repeat_is_equivalent_within_identical_supplied_context():
     data = sample()
-    for snapshot in data["snapshots"]:
-        snapshot["variant"] = {"assembly": "GRCh38", "sequence_id": "NC_000001.11", "position": 101, "ref": "AA", "alt": "A", "reference_context": {"start": 100, "sequence": "AAAAAA"}}
+    for position, snapshot in zip((101, 102), data["snapshots"]):
+        snapshot["variant"] = {"assembly": "GRCh38", "sequence_id": "NC_000001.11", "position": position, "ref": "AA", "alt": "A", "reference_context": {"start": 100, "sequence": "AAAAAA"}}
+    result = run(data)
+    assert result.identity.status == "unresolved"
+    assert "does not establish reference-backed indel equivalence" in result.identity.explanation
+    assert "supplied reference context" in result.identity.explanation
+    data["snapshots"][1]["variant"]["reference_context"] = {"start": 101, "sequence": "AAAAAA"}
     assert run(data).identity.status == "unresolved"
+
+
+def test_multiple_annotation_rows_and_significance_override():
+    data = sample()
+    extra = {"gene_id":"GENE2", "transcript_id":"TX2", "consequence":"intron_variant"}
+    data["snapshots"][0]["annotations"] = [extra]
+    data["snapshots"][1]["annotations"] = [{**extra, "consequence":"missense_variant"}]
+    data["meaningful_overrides"] = {"annotations[GENE2|TX2||].consequence":False}
+    result = run(data)
+    difference = next(d for d in result.differences if d.field == "annotations[GENE2|TX2||].consequence")
+    assert difference.before == "intron_variant" and difference.after == "missense_variant"
+    assert difference.meaningful is False
+    assert next(e for e in result.evidence if e.id == difference.evidence_ids[0]).data["meaningful_override"] is False
+
+
+def test_additional_variants_match_by_exact_representation():
+    data = sample()
+    variant = {"assembly":"GRCh38", "sequence_id":"NC_000001.11", "position":104,
+               "ref":"T", "alt":"G", "reference_context":{"start":100,"sequence":"GACGTACG"}}
+    annotation = {"gene_id":"GENE2", "transcript_id":"TX2", "consequence":"intron_variant"}
+    data["snapshots"][0]["variant_records"] = [{"variant":variant,"annotations":[annotation]}]
+    data["snapshots"][1]["variant_records"] = [{"variant":variant,"annotations":[{**annotation,"consequence":"missense_variant"}]}]
+    result = run(data)
+    assert any(d.field.endswith("annotations[GENE2|TX2||].consequence") and
+               d.before == "intron_variant" and d.after == "missense_variant" for d in result.differences)
+    data["snapshots"][1]["variant_records"] = []
+    result = run(data)
+    assert any(d.field.endswith(".presence") and d.before == "present" and d.after is None
+               for d in result.differences)
 
 
 def test_lookup_must_match_observations_and_allele():

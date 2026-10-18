@@ -27,3 +27,9 @@ Limit the first public adapter to GRCh38 single nucleotide substitutions. Requir
 ## 2026-10-13: Independent NCBI allele check
 
 Pin the GRCh38.p14 primary-chromosome accession mapping from NCBI's assembly report, including its source hash. On explicit user action, retrieve one RefSeq base with EFetch and check the corresponding SNV through NCBI Variation Services' contextual SPDI and HGVS endpoints. Preserve each response separately from the Ensembl source record. A reference disagreement stops notation requests and remains visible. Link a saved check summary and ID in generated comparisons. Agreement never verifies a VEP transcript-selection cause; disagreement downgrades cross-source identity to unresolved.
+
+## 2026-10-17: Replay-checked portability and conservative indel status
+
+An exported bundle contains a result recomputed with the current engine. Import recomputes it again, validates preserved response hashes and derived IDs, and refuses a conflicting investigation ID. A previous saved result remains in the local database; its portable export receives the current input hash and ID. These checks detect inconsistent or changed bundle contents, but self-contained hashes do not authenticate who supplied external data.
+
+Extra variants in a snapshot match only by exact submitted representation. A local repeat-context edit comparison may show matching edited sequence, but it is not enough to upgrade indel identity without a validated assembly reference and standards-aware normalization. The user supplied SnpEff VCF comparison similarly reports transcript output agreement without claiming an authenticated second engine run or causal explanation.

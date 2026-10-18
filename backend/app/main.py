@@ -1,25 +1,46 @@
 import os
+import ipaddress
+import sqlite3
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .engine import compare
 from .ensembl import PUBLIC_EXAMPLE, CompareTranscripts, SourceError, SourceLookup, SourceLookupResult, SourceRecord, comparison_input, fetch_record
-from .models import InvestigationInput, InvestigationResult, ReferenceCheckSummary
+from .models import AnnotationCheckSummary, InvestigationInput, InvestigationResult, ReferenceCheckSummary
 from .ncbi import ReferenceCheck, ReferenceCheckError, ReferenceCheckRequest, ReferenceCheckResult, fetch_reference_check
 from .regression import CreateRegressionCase, RegressionCase, RegressionRun, RegressionRunRequest, create_case, run_case
 from .report import markdown_report
-from .storage import list_items, load, save, save_case, load_case, list_cases, save_run, load_run, list_runs, save_source_record, load_source_record, latest_source_record, save_reference_check, latest_reference_check, load_reference_check
+from .snpeff import SnpEffCheck, SnpEffCheckRequest, compare_snpeff
+from .bundle import ENGINE_VERSION, create_bundle, verify_bundle
+from .storage import list_items, load, save, save_case, load_case, list_cases, save_run, load_run, list_runs, save_source_record, load_source_record, latest_source_record, save_reference_check, latest_reference_check, load_reference_check, delete_investigation, initialize, StorageLimitError, RecordConflictError, save_snpeff_check, latest_snpeff_check
 
 BASE = Path(__file__).resolve().parents[2]
 DEMO = BASE / "fixtures" / "transcript-switch.json"
 DB = Path(os.environ.get("GENOMEDEBUGGER_DB", str(BASE / "data" / "investigations.db")))
-app = FastAPI(title="GenomeDebugger", version="0.4.0", description="Local genomic discrepancy investigation with optional Ensembl and NCBI checks")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+app = FastAPI(title="GenomeDebugger", version=ENGINE_VERSION, description="Local genomic discrepancy investigation with optional Ensembl and NCBI checks and user supplied SnpEff output comparison")
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type"])
+
+
+@app.exception_handler(StorageLimitError)
+async def storage_limit_error(_request: Request, exc: StorageLimitError):
+    return JSONResponse(status_code=507, content={"detail": str(exc)})
+
+
+@app.exception_handler(RecordConflictError)
+async def record_conflict_error(_request: Request, exc: RecordConflictError):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.middleware("http")
 async def limit_input(request: Request, call_next):
+    client_host = request.client.host if request.client else ""
+    try:
+        local = ipaddress.ip_address(client_host).is_loopback
+    except ValueError:
+        local = client_host == "testclient"
+    if not local:
+        return JSONResponse(status_code=403, content={"detail": "GenomeDebugger accepts local connections only"})
     if request.method == "POST":
         limit = 1_000_000
         if int(request.headers.get("content-length", "0")) > limit:
@@ -37,7 +58,11 @@ async def limit_input(request: Request, call_next):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "0.4.0"}
+    try:
+        initialize(DB)
+    except (OSError, sqlite3.Error) as exc:
+        raise HTTPException(status_code=503, detail="Local database unavailable") from exc
+    return {"status": "ok", "version": ENGINE_VERSION}
 
 
 @app.get("/api/sources/ensembl/example")
@@ -98,6 +123,27 @@ def reference_check(id_: str):
     return check
 
 
+@app.post("/api/sources/ensembl/records/{id_}/snpeff-check", response_model=SnpEffCheck)
+def snpeff_check(id_: str, payload: SnpEffCheckRequest):
+    record = load_source_record(DB, id_)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Source record not found")
+    try:
+        check = compare_snpeff(record, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    save_snpeff_check(DB, check)
+    return check
+
+
+@app.get("/api/sources/ensembl/records/{id_}/snpeff-check", response_model=SnpEffCheck)
+def saved_snpeff_check(id_: str):
+    check = latest_snpeff_check(DB, id_)
+    if check is None:
+        raise HTTPException(status_code=404, detail="No SnpEff check saved for this record")
+    return check
+
+
 @app.post("/api/sources/ensembl/records/{id_}/compare", response_model=InvestigationResult)
 def compare_ensembl_transcripts(id_: str, payload: CompareTranscripts):
     record = load_source_record(DB, id_)
@@ -109,7 +155,14 @@ def compare_ensembl_transcripts(id_: str, payload: CompareTranscripts):
             "id", "source_record_id", "source_response_sha256", "refseq_accession",
             "expected_reference", "observed_reference", "reference_matches",
             "spdi_matches", "hgvs_matches", "status"})) if check else None
-        investigation_input = comparison_input(record, payload, summary)
+        annotation = latest_snpeff_check(DB, id_)
+        annotation_summary = AnnotationCheckSummary(
+            id=annotation.id, source_record_id=annotation.source_record_id,
+            source_response_sha256=annotation.source_response_sha256, vcf_sha256=annotation.vcf_sha256,
+            snpeff_version=annotation.snpeff_version, genome_database=annotation.genome_database,
+            database_sha256=annotation.database_sha256, status=annotation.status,
+            matched_transcripts=len(annotation.matches)) if annotation else None
+        investigation_input = comparison_input(record, payload, summary, annotation_summary)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     result = compare(investigation_input)
@@ -130,8 +183,8 @@ def create_investigation(payload: InvestigationInput):
 
 
 @app.get("/api/investigations")
-def investigations():
-    return list_items(DB)
+def investigations(q: str = Query(default="", max_length=200), limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0)):
+    return list_items(DB, q, limit, offset)
 
 
 @app.get("/api/investigations/{id_}", response_model=InvestigationResult)
@@ -140,6 +193,56 @@ def investigation(id_: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Investigation not found")
     return result
+
+
+@app.delete("/api/investigations/{id_}")
+def remove_investigation(id_: str):
+    try:
+        removed = delete_investigation(DB, id_)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not removed:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+    return {"deleted": id_}
+
+
+@app.get("/api/investigations/{id_}/bundle")
+def investigation_bundle(id_: str):
+    result = load(DB, id_)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+    try:
+        return create_bundle(DB, result)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/bundles/verify")
+def bundle_verify(payload: dict):
+    try:
+        result, source, check, snpeff = verify_bundle(payload)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"valid": True, "investigation_id": result.id, "has_source_record": source is not None, "has_reference_check": check is not None, "has_snpeff_check": snpeff is not None}
+
+
+@app.post("/api/bundles/import")
+def bundle_import(payload: dict):
+    try:
+        result, source, check, snpeff = verify_bundle(payload)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    existing = load(DB, result.id)
+    if existing is not None and existing != result:
+        raise HTTPException(status_code=409, detail="An investigation with this input ID already has a different saved result")
+    if source:
+        save_source_record(DB, source)
+    if check:
+        save_reference_check(DB, check)
+    if snpeff:
+        save_snpeff_check(DB, snpeff)
+    save(DB, result)
+    return {"imported": result.id}
 
 
 @app.get("/api/investigations/{id_}/report.md", response_class=PlainTextResponse)

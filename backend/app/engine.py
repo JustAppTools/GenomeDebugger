@@ -2,7 +2,7 @@ import hashlib
 import json
 from .models import (
     Difference, Evidence, Finding, IdentityResult, InvestigationInput,
-    InvestigationResult, Variant,
+    InvestigationResult, Variant, variant_key,
 )
 
 
@@ -36,7 +36,15 @@ def identity(a: Variant, b: Variant) -> IdentityResult:
     ea, eb = simple_edit(a), simple_edit(b)
     fmt = lambda e: f"{a.sequence_id}:{e[0]}:{e[1] or '-'}>{e[2] or '-'}"
     if not ea[1] or not ea[2] or not eb[1] or not eb[2]:
-        return IdentityResult(status="unresolved", explanation="An insertion or deletion needs repeat-aware normalization; flank trimming is insufficient.", normalized_a=fmt(ea), normalized_b=fmt(eb), evidence_ids=["identity-inputs"])
+        def edited_sequence(variant: Variant) -> str:
+            offset = variant.position - ca.start
+            return ca.sequence[:offset] + variant.alt + ca.sequence[offset + len(variant.ref):]
+        equivalent = edited_sequence(a) == edited_sequence(b)
+        return IdentityResult(status="unresolved" if equivalent else "rejected",
+                              explanation="Applying both edits to the identical supplied reference context "
+                              + ("produces the same local sequence, but this does not establish reference-backed indel equivalence." if equivalent else "produces different local sequences.")
+                              + " The supplied context is not independently authenticated against an assembly.",
+                              normalized_a=fmt(ea), normalized_b=fmt(eb), evidence_ids=["identity-inputs"])
     return IdentityResult(
         status="verified" if ea == eb else "rejected",
         explanation="Both alleles match the same supplied reference context; trimmed substitution edits " + ("match." if ea == eb else "differ."),
@@ -50,6 +58,7 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     evidence = [Evidence(id="identity-inputs", kind="input", description="Assembly, sequence accession, reference context, and submitted alleles", data={"a": a.variant.model_dump(), "b": b.variant.model_dump()})]
     ident = identity(a.variant, b.variant)
     reference_check = payload.reference_check
+    annotation_check = payload.annotation_check
     if reference_check:
         evidence.append(Evidence(id="reference-check", kind="external_reference_observation",
                                  description="Submitted NCBI reference and notation check linked to this source record",
@@ -60,13 +69,23 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
                 "explanation": "A linked NCBI reference or notation check disagrees with the Ensembl source record; cross-source allele identity remains unresolved.",
                 "evidence_ids": [*ident.evidence_ids, "reference-check"],
             })
+    if annotation_check:
+        evidence.append(Evidence(id="annotation-check", kind="independent_annotation_output",
+                                 description="User-supplied SnpEff ANN output compared with preserved VEP transcripts; provenance is user declared",
+                                 data=annotation_check.model_dump()))
     differences: list[Difference] = []
 
     def add(field, before, after, category="annotation", meaningful=True):
         if before == after:
             return
         eid = f"diff-{len(differences)+1}"
-        evidence.append(Evidence(id=eid, kind="field_comparison", description=f"Observed {field} values in the two supplied snapshots", data={"field": field, "a": before, "b": after, "snapshot_ids": [a.id, b.id]}))
+        rule = payload.meaningful_overrides.get(field)
+        if rule is not None:
+            meaningful = rule
+        data = {"field": field, "a": before, "b": after, "snapshot_ids": [a.id, b.id]}
+        if rule is not None:
+            data["meaningful_override"] = rule
+        evidence.append(Evidence(id=eid, kind="field_comparison", description=f"Observed {field} values in the two supplied snapshots", data=data))
         differences.append(Difference(field=field, category=category, before=before, after=after, meaningful=meaningful, evidence_ids=[eid]))
 
     add("assembly", a.variant.assembly, b.variant.assembly, "identity")
@@ -78,6 +97,53 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     add("transcript_id", a.annotation.transcript_id, b.annotation.transcript_id)
     add("consequence", a.annotation.consequence, b.annotation.consequence)
     add("protein_consequence", a.annotation.protein_consequence, b.annotation.protein_consequence)
+    def row_key(row):
+        clinical = row.clinical
+        return "|".join((row.gene_id, row.transcript_id, clinical.framework if clinical else "", clinical.condition_id if clinical else ""))
+    # The selected annotation is compared above. Repeating it here invents
+    # missing-row changes whenever the selected transcript changes.
+    rows_a = {row_key(row): row for row in a.annotations}
+    rows_b = {row_key(row): row for row in b.annotations}
+    for key in sorted(rows_a.keys() | rows_b.keys()):
+        left, right = rows_a.get(key), rows_b.get(key)
+        if left is None or right is None:
+            add(f"annotations[{key}].presence", "present" if left else None, "present" if right else None)
+            continue
+        add(f"annotations[{key}].consequence", left.consequence, right.consequence)
+        add(f"annotations[{key}].protein_consequence", left.protein_consequence, right.protein_consequence)
+        if left.clinical and right.clinical:
+            add(f"annotations[{key}].clinical.classification", left.clinical.classification, right.clinical.classification, "clinical")
+            add(f"annotations[{key}].clinical.review_status", left.clinical.review_status, right.clinical.review_status, "clinical")
+    extra_identity_issues: list[str] = []
+    variant_rows_a = {variant_key(row.variant): row for row in a.variant_records}
+    variant_rows_b = {variant_key(row.variant): row for row in b.variant_records}
+    for variant_id in sorted(variant_rows_a.keys() | variant_rows_b.keys()):
+        left, right = variant_rows_a.get(variant_id), variant_rows_b.get(variant_id)
+        label = f"variant_records[{variant_id[0]}|{variant_id[1]}:{variant_id[2]}:{variant_id[3]}>{variant_id[4]}]"
+        if left is None or right is None:
+            add(f"{label}.presence", "present" if left else None, "present" if right else None, "variant")
+            continue
+        local_identity = identity(left.variant, right.variant)
+        identity_eid = f"variant-record-{len(evidence)+1}"
+        evidence.append(Evidence(id=identity_eid, kind="input",
+                                 description=f"Additional variant identity within supplied contexts: {label}",
+                                 data={"a": left.variant.model_dump(), "b": right.variant.model_dump(),
+                                       "status": local_identity.status, "explanation": local_identity.explanation}))
+        if local_identity.status != "verified":
+            extra_identity_issues.append(identity_eid)
+        left_rows = {row_key(row): row for row in left.annotations}
+        right_rows = {row_key(row): row for row in right.annotations}
+        for key in sorted(left_rows.keys() | right_rows.keys()):
+            before, after = left_rows.get(key), right_rows.get(key)
+            if before is None or after is None:
+                add(f"{label}.annotations[{key}].presence", "present" if before else None,
+                    "present" if after else None)
+                continue
+            add(f"{label}.annotations[{key}].consequence", before.consequence, after.consequence)
+            add(f"{label}.annotations[{key}].protein_consequence", before.protein_consequence, after.protein_consequence)
+            if before.clinical and after.clinical:
+                add(f"{label}.annotations[{key}].clinical.classification", before.clinical.classification, after.clinical.classification, "clinical")
+                add(f"{label}.annotations[{key}].clinical.review_status", before.clinical.review_status, after.clinical.review_status, "clinical")
     add("tool", a.provenance.tool, b.provenance.tool, "provenance")
     add("tool_version", a.provenance.tool_version, b.provenance.tool_version, "provenance")
     add("source_name", a.provenance.source_name, b.provenance.source_name, "provenance")
@@ -97,6 +163,18 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         add("clinical.assertion_present", str(bool(ac)), str(bool(bc)), "clinical_context")
 
     findings: list[Finding] = []
+    if extra_identity_issues:
+        findings.append(Finding(status="unresolved", cause="additional variant identity",
+                                explanation="One or more additional variants lack independently established identity across the two snapshots. Their annotation rows are compared by exact submitted representation only.",
+                                affected_fields=["variant_records"], evidence_ids=extra_identity_issues))
+    if annotation_check and annotation_check.status == "disagree":
+        findings.append(Finding(status="unresolved", cause="annotation engine disagreement",
+                                explanation="The supplied SnpEff output disagrees with VEP on at least one exact transcript. Different releases or configuration may explain it; causation remains unverified.",
+                                affected_fields=["consequence"], evidence_ids=["annotation-check"]))
+    if annotation_check and annotation_check.status == "unresolved":
+        findings.append(Finding(status="unresolved", cause="incomplete annotation comparison",
+                                explanation="The supplied SnpEff output does not cover every VEP transcript with an exact matching ID, so cross-engine consequence agreement is unresolved.",
+                                affected_fields=["consequence"], evidence_ids=["annotation-check"]))
     if reference_check and reference_check.status == "disagree":
         findings.append(Finding(status="unresolved", cause="independent allele disagreement",
                                 explanation="The pinned NCBI check disagrees with at least one reference or notation observation. The VEP transcript comparison cannot resolve that source disagreement.",
