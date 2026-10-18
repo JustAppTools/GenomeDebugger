@@ -228,9 +228,14 @@ def list_items(path: Path, query: str = "", limit: int = 100, offset: int = 0) -
 def delete_investigation(path: Path, id_: str) -> bool:
     initialize(path)
     with _connection(path) as db:
+        db.execute("BEGIN IMMEDIATE")
         if db.execute("SELECT 1 FROM regression_cases WHERE source_investigation_id = ?", (id_,)).fetchone():
             raise ValueError("This investigation has a pinned regression case and cannot be deleted")
-        return db.execute("DELETE FROM investigations WHERE id = ?", (id_,)).rowcount > 0
+        if not db.execute("SELECT 1 FROM investigations WHERE id = ?", (id_,)).fetchone():
+            return False
+        db.execute("DELETE FROM allele_checks WHERE investigation_id = ?", (id_,))
+        db.execute("DELETE FROM investigations WHERE id = ?", (id_,))
+        return True
 
 
 def backup(path: Path, destination: Path):

@@ -86,10 +86,10 @@ def compare_snpeff(record: SourceRecord, request: SnpEffCheckRequest) -> SnpEffC
             raise ValueError("SnpEff ANN row is incomplete")
         if fields[0] != q.alt:
             raise ValueError("SnpEff ANN allele does not match the VCF alternate")
-        if fields[5].lower() != "transcript" or not fields[6]:
-            continue
         if len(fields) > 15 and fields[15]:
             raise ValueError("SnpEff ANN reports a warning or error; resolve it before comparison")
+        if fields[5].lower() != "transcript" or not fields[6]:
+            continue
         snpeff.setdefault(fields[6],set()).update(fields[1].split("&"))
     ensembl = {row.transcript_id: set(row.consequence_terms) for row in record.transcripts}
     shared = sorted(ensembl.keys() & snpeff.keys())

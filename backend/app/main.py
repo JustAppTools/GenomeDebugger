@@ -20,12 +20,32 @@ from .bundle import ENGINE_VERSION, create_bundle, verify_bundle
 from .storage import list_items, load, save, save_case, load_case, list_cases, save_run, load_run, list_runs, save_source_record, load_source_record, latest_source_record, save_reference_check, latest_reference_check, load_reference_check, delete_investigation, initialize, StorageLimitError, RecordConflictError, save_snpeff_check, latest_snpeff_check
 from .storage import save_allele_check, latest_allele_check
 from .storage import list_source_records, save_bundle_records
+from .storage import load_snpeff_check
+from .check_scope import validate_check_variants
 
 BASE = Path(__file__).resolve().parents[2]
 DEMO = BASE / "fixtures" / "transcript-switch.json"
 DB = Path(os.environ.get("GENOMEDEBUGGER_DB", str(BASE / "data" / "investigations.db")))
 app = FastAPI(title="GenomeDebugger", version=ENGINE_VERSION, description="Local genomic discrepancy investigation with preserved VEP sources, NCBI allele checks, and optional pinned local SnpEff execution")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type"])
+
+
+def validate_linked_checks(payload: InvestigationInput):
+    for label, summary, loader in (("NCBI reference", payload.reference_check, load_reference_check),
+                                   ("SnpEff annotation", payload.annotation_check, load_snpeff_check)):
+        if summary is None:
+            continue
+        check = loader(DB, summary.id)
+        source = load_source_record(DB, summary.source_record_id)
+        if check is None or source is None:
+            raise ValueError(f"{label} summary requires its preserved source and check records")
+        fields = set(type(summary).model_fields)
+        observed = check.model_dump(include=fields)
+        if isinstance(summary, AnnotationCheckSummary):
+            observed["matched_transcripts"] = len(check.matches)
+        if type(summary).model_validate(observed) != summary or source.source_response_sha256 != summary.source_response_sha256:
+            raise ValueError(f"{label} summary does not match its preserved check")
+        validate_check_variants(payload, source, label)
 
 
 @app.exception_handler(StorageLimitError)
@@ -241,6 +261,10 @@ def demo():
 
 @app.post("/api/investigations", response_model=InvestigationResult)
 def create_investigation(payload: InvestigationInput):
+    try:
+        validate_linked_checks(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     result = compare(payload)
     save(DB, result)
     return result
@@ -356,6 +380,8 @@ def run_regression_case(id_: str, payload: RegressionRunRequest):
     if case is None:
         raise HTTPException(status_code=404, detail="Regression case not found")
     try:
+        if payload.candidate is not None:
+            validate_linked_checks(payload.candidate)
         run = run_case(case, payload.candidate)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

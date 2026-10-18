@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import RegressionPanel from './RegressionPanel'
 import type { Result } from './types'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {cleanup();vi.unstubAllGlobals()})
 
 test('saves a case, passes pinned replay, then shows a candidate failure', async () => {
   const input = {title:'Synthetic case',synthetic:true,snapshots:[
@@ -31,4 +31,22 @@ test('saves a case, passes pinned replay, then shows a candidate failure', async
   expect(screen.getAllByText('snapshots[1].annotation.consequence').length).toBeGreaterThan(0)
   expect(fetchMock).toHaveBeenCalledTimes(4)
   expect(fetchMock.mock.calls[0][0]).toBe('/api/regression-cases?source_investigation_id=investigation1')
+})
+
+test.each([{label:'ASCII',title:'A'.repeat(200)},{label:'Unicode',title:'🧬'.repeat(200)}])('bounds the default $label name without splitting characters', async ({title}) => {
+  const result = {id:'long-title',input:{title,synthetic:true,snapshots:[]},input_sha256:'hash'} as unknown as Result
+  const fetchMock=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>[]})
+    .mockResolvedValueOnce({ok:false,status:422,json:async()=>({detail:[{loc:['body','name'],msg:'Specific name validation error'}]})})
+  vi.stubGlobal('fetch',fetchMock)
+  render(<RegressionPanel result={result}/> )
+  const name=screen.getByLabelText('Test name') as HTMLInputElement
+  expect(Array.from(name.value)).toHaveLength(200)
+  expect(name.value).toBe(Array.from(`Regression: ${title}`).slice(0,200).join(''))
+  fireEvent.click(screen.getByRole('button',{name:'Save regression case'}))
+  expect(await screen.findByRole('alert')).toHaveTextContent('name: Specific name validation error')
+  expect(JSON.parse(fetchMock.mock.calls[1][1].body).name).toBe(name.value)
+  fireEvent.change(name,{target:{value:' '.repeat(10)}})
+  expect(screen.getByRole('button',{name:'Save regression case'})).toBeDisabled()
+  fireEvent.change(name,{target:{value:'A'.repeat(201)}})
+  expect(screen.getByRole('button',{name:'Save regression case'})).toBeDisabled()
 })

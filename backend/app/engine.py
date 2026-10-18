@@ -113,8 +113,9 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     add("protein_consequence", a.annotation.protein_consequence, b.annotation.protein_consequence)
     # Selection is compared above; full row sets include the selected row so a
     # different selector does not turn an existing transcript into a missing row.
-    rows_a = {row_key(row): row for row in (a.annotation, *a.annotations)} if a.annotations or b.annotations else {}
-    rows_b = {row_key(row): row for row in (b.annotation, *b.annotations)} if a.annotations or b.annotations else {}
+    primary_aligned = variant_key(a.variant) == variant_key(b.variant) or ident.status == "verified"
+    rows_a = {row_key(row): row for row in (a.annotation, *a.annotations)} if primary_aligned and (a.annotations or b.annotations) else {}
+    rows_b = {row_key(row): row for row in (b.annotation, *b.annotations)} if primary_aligned and (a.annotations or b.annotations) else {}
     for key in sorted(rows_a.keys() | rows_b.keys()):
         left, right = rows_a.get(key), rows_b.get(key)
         label = row_label(key)
@@ -130,24 +131,31 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
             add(f"annotations[{label}].clinical.review_status", left.clinical.review_status, right.clinical.review_status, "clinical")
             add(f"annotations[{label}].clinical.assertion_date", left.clinical.assertion_date, right.clinical.assertion_date, "clinical_metadata", False)
     extra_identity_issues: list[str] = []
-    variant_rows_a = {variant_key(row.variant): row for row in a.variant_records}
-    variant_rows_b = {variant_key(row.variant): row for row in b.variant_records}
+    variant_rows_a = {variant_key(row.variant): (row.variant, row.annotations) for row in a.variant_records}
+    variant_rows_b = {variant_key(row.variant): (row.variant, row.annotations) for row in b.variant_records}
+    if not primary_aligned and (a.variant_records or b.variant_records):
+        # A primary variant is still a member of the complete collection. Keep
+        # focus-field comparisons above, then compare like-for-like rows here.
+        variant_rows_a[variant_key(a.variant)] = (a.variant, [a.annotation, *a.annotations])
+        variant_rows_b[variant_key(b.variant)] = (b.variant, [b.annotation, *b.annotations])
     for variant_id in sorted(variant_rows_a.keys() | variant_rows_b.keys()):
         left, right = variant_rows_a.get(variant_id), variant_rows_b.get(variant_id)
         label = f"variant_records[{quote(variant_id[0], safe='._-')}|{quote(variant_id[1], safe='._-')}:{variant_id[2]}:{variant_id[3]}>{variant_id[4]}]"
         if left is None or right is None:
             add(f"{label}.presence", "present" if left else None, "present" if right else None, "variant")
             continue
-        local_identity = identity(left.variant, right.variant)
+        left_variant, left_annotations = left
+        right_variant, right_annotations = right
+        local_identity = identity(left_variant, right_variant)
         identity_eid = f"variant-record-{len(evidence)+1}"
         evidence.append(Evidence(id=identity_eid, kind="input",
                                  description=f"Additional variant identity within supplied contexts: {label}",
-                                 data={"a": left.variant.model_dump(), "b": right.variant.model_dump(),
+                                 data={"a": left_variant.model_dump(), "b": right_variant.model_dump(),
                                        "status": local_identity.status, "explanation": local_identity.explanation}))
         if local_identity.status != "verified":
             extra_identity_issues.append(identity_eid)
-        left_rows = {row_key(row): row for row in left.annotations}
-        right_rows = {row_key(row): row for row in right.annotations}
+        left_rows = {row_key(row): row for row in left_annotations}
+        right_rows = {row_key(row): row for row in right_annotations}
         for key in sorted(left_rows.keys() | right_rows.keys()):
             before, after = left_rows.get(key), right_rows.get(key)
             annotation_label = row_label(key)

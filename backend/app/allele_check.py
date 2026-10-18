@@ -22,6 +22,17 @@ class SPDI(StrictModel):
         return f"{self.seq_id}:{self.position}:{self.deleted_sequence}:{self.inserted_sequence}"
 
 
+def _validate_normalized_interval(allele: SPDI) -> None:
+    chromosome = next((entry for entry in _manifest()["chromosomes"].values()
+                       if entry["refseq_accession"] == allele.seq_id), None)
+    if chromosome is None:
+        raise ReferenceCheckError("Normalized SPDI accession is not in the pinned reference")
+    # SPDI is zero based and interbase: insertion at sequence length is valid,
+    # while a deletion must fit entirely inside the sequence.
+    if allele.position + len(allele.deleted_sequence) > chromosome["length"]:
+        raise ReferenceCheckError("Normalized SPDI interval exceeds the pinned chromosome length")
+
+
 class AlleleObservation(StrictModel):
     variant: Variant
     accession: str
@@ -91,6 +102,7 @@ def _observation(variant: Variant, fasta: str, contextual: dict | None, hgvs: di
         normalized = SPDI.model_validate({key:data.get(key) for key in SPDI.model_fields})
         if normalized.seq_id != accession or normalized.deleted_sequence == normalized.inserted_sequence:
             raise ReferenceCheckError("NCBI contextual SPDI does not describe a changed allele on the pinned accession")
+        _validate_normalized_interval(normalized)
         if not isinstance(hgvs, dict) or not isinstance(hgvs.get("data"), dict) or not isinstance(hgvs["data"].get("hgvs"), str):
             raise ReferenceCheckError("NCBI genomic HGVS response is missing or malformed")
         notation = hgvs["data"]["hgvs"]

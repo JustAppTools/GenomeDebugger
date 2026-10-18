@@ -1,31 +1,23 @@
 # Current state - 2026-10-18
 
-Version 0.6.1 fixes all 14 findings in `docs/bug-audit-2026-10-18.md`.
+Version 0.6.2 fixes all seven additional findings in `docs/bug-audit-0.6.1-2026-10-18.md`. The earlier 14 fixes remain covered by the test suite.
 
 ## Verification
 
-- Backend: 101 tests passed. Frontend: 21 tests passed. Browser workflows: 9 passed, including both request races and omitted defaults.
+- Backend: 123 tests passed. Frontend: 23 tests passed. Browser workflows: 13 passed, including delayed successful/failed opens, delayed imports, and first-attempt regression saving with a maximum-length title.
 - TypeScript/Vite production build passes.
-- Existing saved investigations remain readable; their exports verify under the current engine. Both existing pinned regression baselines pass.
-- Archived 0.5.0 and 0.6.0 results retain frozen verification rules. New 0.6.1 results receive separate IDs.
-- A real pinned SnpEff run completed with validated GRCh38 assembly metadata and exact input-byte hashing. Its bundle verified. The captured fixture was refreshed; transcript-version coverage still correctly remains unresolved.
-- Local runtime setup supports safe assembly-metadata migration for the known existing installation without replacing its pinned files.
+- All nine existing saved investigation exports verify under the current engine; both existing pinned regression baselines pass. Compatibility checks used a temporary database copy and left the original bytes unchanged. No existing orphan allele checks were found.
+- Archived 0.5.0, 0.6.0, and 0.6.1 results retain frozen comparison rules. New 0.6.2 results receive separate IDs. Check applicability and invalid external-observation guards also apply to archived bundles.
+- This release uses captured scientific fixtures and simulated malformed responses; no new live upstream scientific observations are claimed. The actual pinned SnpEff fixture remains unresolved because transcript versions do not match exactly.
 
 ## Fixes
 
-1. VEP source/snapshot consistency and declared complete annotation-set checks.
-2. Immutable artifact conflicts rejected instead of silently ignored.
-3. Exact Windows input-byte hashing for local SnpEff.
-4. Reviewed database/build and source-assembly validation before execution.
-5. Atomic bundle import with full rollback on failure.
-6. Reusable SQLite pages included in storage capacity; identical imports need no new capacity.
-7. Later draft edits remain visibly stale when an earlier comparison completes.
-8. Changed queries invalidate pending source/check/comparison responses.
-9. Clinical assertion dates retained as metadata differences.
-10. Strict bundle-manifest validation returns HTTP 422 for invalid types.
-11. Derived SnpEff explanations checked against replay.
-12. Regression discovery filtered by investigation; older lists have pagination.
-13. All generated difference-path lengths supported by overrides within the request budget.
-14. Guided mode applies the optional synthetic default while rejecting invalid explicit values.
+1. Reference and annotation checks bind to the full compared primary variant, with preserved evidence required for generic API comparisons and regression candidates.
+2. SnpEff warnings/errors on non-transcript ANN entries invalidate the record before feature filtering.
+3. Primary promotion retains complete variant membership and compares annotations within the correct variant.
+4. Selection revisions prevent older opens, failures, imports, and comparison responses from replacing newer workspace selections.
+5. Investigation deletion removes owned allele checks atomically and preserves pinned baselines/shared sources; rollback is covered.
+6. Contextual SPDI coordinates and deleted intervals must fit the pinned chromosome; insertion at its exact interbase end remains valid.
+7. Default regression names are bounded without splitting Unicode characters, validated before saving, and show field-specific server errors.
 
 Scientific boundaries remain in `docs/scientific-validity.md`. Cross-assembly mapping, full historical pipeline reproduction, VRS, and clinical interpretation remain outside the current implementation.

@@ -7,7 +7,7 @@ const API = '/api'
 function pretty(value: unknown): string { return value === undefined ? '—' : typeof value === 'string' ? value : JSON.stringify(value) }
 
 export default function RegressionPanel({ result }: {result: Result}) {
-  const [name, setName] = useState(`Regression: ${result.input.title}`)
+  const [name, setName] = useState(()=>Array.from(`Regression: ${result.input.title}`).slice(0,200).join(''))
   const [regressionCase, setRegressionCase] = useState<RegressionCase | null>(null)
   const [candidateText, setCandidateText] = useState(JSON.stringify(result.input, null, 2))
   const [advanced,setAdvanced] = useState(false)
@@ -16,6 +16,7 @@ export default function RegressionPanel({ result }: {result: Result}) {
   const [hasOlder,setHasOlder] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const validName=name.trim().length>0 && Array.from(name).length<=200
 
   useEffect(() => {
     let live = true
@@ -39,10 +40,17 @@ export default function RegressionPanel({ result }: {result: Result}) {
   }, [result.id])
 
   async function saveCase() {
+    if(!validName){setError('Test name must contain 1–200 characters.');return}
     setBusy(true); setError('')
     try {
       const response = await fetch(`${API}/investigations/${result.id}/regression-cases`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})
-      if (!response.ok) throw new Error(`Unable to save regression case (${response.status})`)
+      if (!response.ok) {
+        const body=await response.json().catch(()=>null)
+        const detail=body?.detail
+        const message=typeof detail==='string'?detail:Array.isArray(detail)?detail.map(item=>
+          `${Array.isArray(item.loc)?item.loc.filter((part:unknown)=>part!=='body').join('.'):'Test name'}: ${item.msg??'Invalid value'}`).join('; '):''
+        throw new Error(message||`Unable to save regression case (${response.status})`)
+      }
       setRegressionCase(await response.json())
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to save regression case') }
     finally { setBusy(false) }
@@ -97,7 +105,7 @@ export default function RegressionPanel({ result }: {result: Result}) {
   const passCount = run?.checks.filter(check => check.required && check.passed).length ?? 0
   return <div className="regression-stack">
     <section className="panel regression-intro"><div className="panel-heading"><div><span className="eyebrow">SCIENTIFIC REGRESSION</span><h2>Preserve this discrepancy as a test</h2><p>Pin expected annotations, field differences, findings, and evidence from this investigation.</p></div><div className="regression-symbol"><ClipboardCheck size={25}/></div></div>
-      {!regressionCase ? <div className="case-create"><label htmlFor="case-name">Test name</label><div><input id="case-name" value={name} onChange={e=>setName(e.target.value)} maxLength={200}/><button className="button primary" onClick={saveCase} disabled={busy||!name.trim()}><Save size={16}/> Save regression case</button></div><small>The saved baseline is immutable. It includes both snapshots and the controlled lookup.</small></div> : <div className="case-record"><div><span className="record-label">SAVED CASE</span><strong>{regressionCase.name}</strong><code>{regressionCase.id}</code></div><div><span className="record-label">BASELINE INPUT SHA-256</span><code>{regressionCase.source_investigation.input_sha256}</code></div></div>}
+      {!regressionCase ? <div className="case-create"><label htmlFor="case-name">Test name</label><div><input id="case-name" value={name} onChange={e=>setName(e.target.value)} maxLength={200}/><button className="button primary" onClick={saveCase} disabled={busy||!validName}><Save size={16}/> Save regression case</button></div><small>The saved baseline is immutable. It includes both snapshots and the controlled lookup.</small></div> : <div className="case-record"><div><span className="record-label">SAVED CASE</span><strong>{regressionCase.name}</strong><code>{regressionCase.id}</code></div><div><span className="record-label">BASELINE INPUT SHA-256</span><code>{regressionCase.source_investigation.input_sha256}</code></div></div>}
     </section>
     {error&&<div className="error" role="alert">{error}</div>}
     {regressionCase&&<><section className="panel regression-actions"><div className="panel-heading"><div><span className="eyebrow">REPLAY</span><h2>Run the assertion</h2><p>A pinned run checks the current comparison engine. A candidate run checks new analysis outputs for the same submitted allele descriptions.</p></div></div><div className="run-options"><div className="run-option"><div className="option-head"><div className="card-icon blue"><Play size={17}/></div><div><h3>Pinned replay</h3><p>Rerun the saved snapshots and require the same evidence data.</p></div></div><button className="button secondary" onClick={()=>runCase('pinned')} disabled={busy}><Play size={15}/> Run pinned baseline</button></div><div className="run-option"><div className="option-head"><div className="card-icon green"><FlaskConical size={17}/></div><div><h3>Candidate snapshots</h3><p>Edit key outputs below; evidence changes are shown separately.</p></div></div><button className="button primary" onClick={()=>runCase('candidate')} disabled={busy||!candidate}><ArrowRight size={15}/> Check candidate</button></div></div><div className="candidate-preview"><strong>Pinned expectations</strong><span>Identity: {result.identity.status}; {result.differences.length} differences; {result.findings.length} findings.</span></div>{candidate?.snapshots?.map((snapshot,index)=><div className="candidate-fields" key={index}><h3>Analysis {index===0?'A':'B'} · {snapshot.annotation.transcript_id}</h3><label className="guide-field">Consequence<input aria-label={`Candidate analysis ${index+1} consequence`} value={snapshot.annotation.consequence} onChange={e=>changeCandidate(index,'annotation','consequence',e.target.value)}/></label><label className="guide-field">Protein consequence<input aria-label={`Candidate analysis ${index+1} protein consequence`} value={snapshot.annotation.protein_consequence??''} onChange={e=>changeCandidate(index,'annotation','protein_consequence',e.target.value)}/></label><label className="guide-field">Tool version<input aria-label={`Candidate analysis ${index+1} tool version`} value={snapshot.provenance.tool_version} onChange={e=>changeCandidate(index,'provenance','tool_version',e.target.value)}/></label><label className="guide-field">Source release<input aria-label={`Candidate analysis ${index+1} source release`} value={snapshot.provenance.source_release} onChange={e=>changeCandidate(index,'provenance','source_release',e.target.value)}/></label></div>)}<button className="text-button" onClick={()=>setAdvanced(!advanced)}>{advanced?'Hide advanced JSON':'Advanced JSON'}</button>{advanced&&<><label className="candidate-label" htmlFor="candidate-json">CANDIDATE INPUT JSON</label><textarea id="candidate-json" aria-label="Candidate input JSON" spellCheck={false} value={candidateText} onChange={e=>setCandidateText(e.target.value)}/></>}<div className="editor-foot">Both candidate variants must exactly match the saved allele descriptions. Tool and source versions may change.</div></section>

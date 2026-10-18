@@ -67,6 +67,8 @@ function EvidencePanel({ evidence, selected, onSelect }: {evidence: Evidence[]; 
 export default function App() {
   const [inputText, setInputTextState] = useState('')
   const draft = useRef('')
+  const selection = useRef(0)
+  const pendingOpen = useRef<string|null>(null)
   function setInputText(value:string) {draft.current=value;setInputTextState(value)}
   const [inputDirty, setInputDirty] = useState(false)
   const [inputMode,setInputMode] = useState<'guided'|'json'>('guided')
@@ -115,47 +117,55 @@ export default function App() {
     setError('');setInputMode('guided')
   }
 
-  async function openInvestigation(id: string) {
+  async function openInvestigation(id: string, revision=++selection.current) {
+    if(revision!==selection.current)return
+    pendingOpen.current=id
     setBusy(true); setError('')
     try {
       const response = await fetch(`${API}/investigations/${id}`)
       if (!response.ok) throw new Error(`Saved investigation unavailable (${response.status})`)
       const saved = await response.json() as Result
+      if(revision!==selection.current)return
       setResult(saved); setInputText(JSON.stringify(saved.input,null,2)); setInputDirty(false); setInputMode('json'); setTab('overview'); setSelectedEvidence(null)
-    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to open investigation') }
-    finally { setBusy(false) }
+    } catch (e) { if(revision===selection.current)setError(e instanceof Error ? e.message : 'Unable to open investigation') }
+    finally { if(revision===selection.current){setBusy(false);pendingOpen.current=null} }
   }
 
   async function loadDemo() {
+    const revision=++selection.current;pendingOpen.current=null
     setBusy(true); setError('')
     try {
       const response = await fetch(`${API}/demos/transcript-switch`)
       if (!response.ok) throw new Error(`Demo unavailable (${response.status})`)
       const body = await response.json() as InvestigationInput
+      if(revision!==selection.current)return
       const submittedText = JSON.stringify(body,null,2)
       setInputText(submittedText)
       setResult(null); setInputDirty(false); setInputMode('json'); setTab('input')
       const comparison = await fetch(`${API}/investigations`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
       if (!comparison.ok) throw new Error(`Demo comparison failed (${comparison.status})`)
-      showResult(await comparison.json() as Result, submittedText)
+      showResult(await comparison.json() as Result, submittedText, revision)
     }
-    catch (e) { setError(e instanceof Error ? e.message : 'Unable to load demo') }
-    finally { setBusy(false) }
+    catch (e) { if(revision===selection.current)setError(e instanceof Error ? e.message : 'Unable to load demo') }
+    finally { if(revision===selection.current)setBusy(false) }
   }
-  function showResult(next: Result, submittedText?:string) {
+  function showResult(next: Result, submittedText?:string, revision?:number) {
+    if(revision!==undefined && revision!==selection.current)return
+    if(revision===undefined){selection.current++;pendingOpen.current=null;setBusy(false)}
     setResult(next); setInputDirty(submittedText !== undefined && draft.current !== submittedText); setTab('overview'); setSelectedEvidence(null); setNotice('')
     setRecent(previous => [{id:next.id,title:next.input.title},...previous.filter(item=>item.id!==next.id)].slice(0,100))
   }
   async function run() {
+    const revision=++selection.current;pendingOpen.current=null
     setBusy(true); setError('')
     try {
       if (!parsed) throw new Error('Input is not valid JSON.')
       const submittedText = inputText
       const response = await fetch(`${API}/investigations`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(parsed)})
       if (!response.ok) { const detail = await response.json(); throw new Error(response.status===422 ? `Schema validation failed: ${validationMessage(detail.detail)}` : detail.detail || `Comparison failed (${response.status})`) }
-      showResult(await response.json() as Result, submittedText)
-    } catch (e) { setError(e instanceof Error ? e.message : 'Comparison failed') }
-    finally { setBusy(false) }
+      showResult(await response.json() as Result, submittedText, revision)
+    } catch (e) { if(revision===selection.current)setError(e instanceof Error ? e.message : 'Comparison failed') }
+    finally { if(revision===selection.current)setBusy(false) }
   }
   async function exportMarkdown() {
     if (!result) return
@@ -183,7 +193,8 @@ export default function App() {
     } catch(e) {setError(e instanceof Error?e.message:'Unable to read JSON file')}
   }
   async function importBundle(file:File) {
-    setError('')
+    const revision=++selection.current;pendingOpen.current=null
+    setBusy(true);setError('')
     try {
       if (file.size > MAX_BUNDLE_BYTES) throw new Error('Bundle exceeds the 32 MB import limit')
       const content = JSON.parse(await file.text())
@@ -193,11 +204,13 @@ export default function App() {
       const imported = await fetch(`${API}/bundles/import`,options)
       if (!imported.ok) {const body=await imported.json();throw new Error(body.detail||'Bundle import failed')}
       const body = await imported.json()
-      await openInvestigation(body.imported)
-    } catch(e) {setError(e instanceof Error?e.message:'Bundle import failed')}
+      if(revision===selection.current)await openInvestigation(body.imported,revision)
+    } catch(e) {if(revision===selection.current)setError(e instanceof Error?e.message:'Bundle import failed')}
+    finally {if(revision===selection.current)setBusy(false)}
   }
   function inspectEvidence(id: string) { setSelectedEvidence(id); setTab('evidence') }
   const a = result?.input.snapshots[0], b = result?.input.snapshots[1]
+  const visibleSelection = selection.current
   return <div className="app-shell">
     <aside className="sidebar"><div className="brand"><div className="brand-mark"><Dna size={23}/></div><div><strong>Genome<span>Debugger</span></strong><small>DISCREPANCY WORKSTATION</small></div></div>
       <div className="sidebar-section"><span className="sidebar-label">WORKSPACE</span><button className={`nav ${tab==='overview'?'active':''}`} onClick={()=>selectTab('overview')}><GitCompareArrows size={18}/> Investigation {tab==='overview'&&<span className="nav-dot"/>}</button><button className={`nav ${tab==='differences'?'active':''}`} onClick={()=>selectTab('differences')} disabled={!result}><Layers3 size={18}/> Discrepancies</button><button className={`nav ${tab==='evidence'?'active':''}`} onClick={()=>selectTab('evidence')} disabled={!result}><Workflow size={18}/> Evidence trail</button><button className={`nav ${tab==='regression'?'active':''}`} onClick={()=>selectTab('regression')} disabled={!result}><ClipboardCheck size={18}/> Regression test</button><button className={`nav ${tab==='input'?'active':''}`} onClick={()=>selectTab('input')}><Braces size={18}/> Snapshot input</button><button className={`nav ${tab==='source'?'active':''}`} onClick={()=>selectTab('source')}><Globe2 size={18}/> Public source</button><button className={`nav ${tab==='library'?'active':''}`} onClick={()=>selectTab('library')}><LibraryBig size={18}/> Saved records</button></div>
@@ -215,8 +228,8 @@ export default function App() {
       {result && tab==='differences' && <DifferenceTable differences={result.differences} onEvidence={inspectEvidence}/>}
       {result && tab==='evidence' && <EvidencePanel evidence={result.evidence} selected={selectedEvidence} onSelect={setSelectedEvidence}/>}
       {result && tab==='regression' && <RegressionPanel result={result}/>}
-      {tab==='source' && <PublicSourcePanel onCompare={next=>{setInputText(JSON.stringify(next.input,null,2)); showResult(next)}}/>}
-      {tab==='library' && <InvestigationLibrary onOpen={openInvestigation} onImport={file=>{void importBundle(file)}} onDeleted={id=>{setRecent(previous=>previous.filter(item=>item.id!==id));if(result?.id===id)setResult(null)}}/>}
+      {tab==='source' && <PublicSourcePanel onCompare={next=>{if(visibleSelection!==selection.current)return;setInputText(JSON.stringify(next.input,null,2)); showResult(next)}}/>}
+      {tab==='library' && <InvestigationLibrary onOpen={openInvestigation} onImport={file=>{void importBundle(file)}} onDeleted={id=>{setRecent(previous=>previous.filter(item=>item.id!==id));if(pendingOpen.current===id){selection.current++;pendingOpen.current=null;setBusy(false)};setResult(previous=>previous?.id===id?null:previous)}}/>}
       {tab==='input' && <section className="panel input-panel">
         <div className="panel-heading"><div><span className="eyebrow">VERSIONED INPUT</span><h2>Analysis snapshots</h2><p>Build two analyses with the guide, or edit the complete JSON schema. Data is sent only to the local backend when you compare.</p></div><div className="input-actions"><button className="button secondary" onClick={loadDemo} disabled={busy}><FlaskConical size={16}/> Run demo</button><button className="button primary" onClick={run} disabled={!parsed||busy||guidedInvalid}><GitCompareArrows size={16}/> Compare</button></div></div>
         <div className="input-toolbar"><button className={inputMode==='guided'?'selected':''} onClick={openGuided}>Guided form</button><button className={inputMode==='json'?'selected':''} onClick={()=>setInputMode('json')}>JSON editor</button><label className="button secondary">Import JSON<input aria-label="Import input JSON" type="file" accept=".json,application/json" onChange={e=>{const file=e.target.files?.[0];if(file)void loadInputFile(file);e.target.value=''}}/></label></div>

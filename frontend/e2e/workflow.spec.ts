@@ -205,3 +205,72 @@ test('valid omitted defaults work in both JSON and guided modes',async({page})=>
   await page.getByRole('button',{name:'Compare analyses',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
 })
+
+for(const oldFailure of [false,true]) {
+  test(`latest library selection wins over an older ${oldFailure?'failed':'successful'} response`,async({page})=>{
+    const input=await (await page.request.get('/api/demos/transcript-switch')).json()
+    input.title=`Selection race A ${oldFailure}`
+    const a=await (await page.request.post('/api/investigations',{data:input})).json()
+    input.title=`Selection race B ${oldFailure}`
+    const b=await (await page.request.post('/api/investigations',{data:input})).json()
+    let release:(()=>void)|undefined
+    let finished=false
+    await page.route(`**/api/investigations/${a.id}`,async route=>{
+      await new Promise<void>(resolve=>{release=resolve})
+      await route.fulfill(oldFailure?{status:503,json:{detail:'Older request failed'}}:{json:a})
+      finished=true
+    })
+    await page.goto('/')
+    await page.getByRole('button',{name:'Saved records',exact:true}).click()
+    await page.locator('.library-row').filter({hasText:a.input.title}).getByRole('button',{name:'Open',exact:true}).click()
+    await expect.poll(()=>Boolean(release)).toBe(true)
+    await page.locator('.library-row').filter({hasText:b.input.title}).getByRole('button',{name:'Open',exact:true}).click()
+    await expect(page.locator('.breadcrumbs')).toContainText(b.id)
+    release!()
+    await expect.poll(()=>finished).toBe(true)
+    await page.getByRole('button',{name:'Snapshot JSON',exact:true}).click()
+    expect(JSON.parse(await page.getByLabel('Investigation JSON').inputValue()).title).toBe(b.input.title)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+  })
+}
+
+test('an earlier bundle import cannot replace a later selected investigation',async({page})=>{
+  const input=await (await page.request.get('/api/demos/transcript-switch')).json()
+  input.title='Delayed import A'
+  const a=await (await page.request.post('/api/investigations',{data:input})).json()
+  const bundle=await (await page.request.get(`/api/investigations/${a.id}/bundle`)).json()
+  input.title='Selected while importing B'
+  const b=await (await page.request.post('/api/investigations',{data:input})).json()
+  let release:(()=>void)|undefined
+  let finished=false
+  await page.route('**/api/bundles/import',async route=>{
+    const response=await route.fetch()
+    await new Promise<void>(resolve=>{release=resolve})
+    await route.fulfill({response});finished=true
+  })
+  await page.goto('/')
+  await page.getByRole('button',{name:'Saved records',exact:true}).click()
+  await page.getByLabel('Import replay-checked bundle').setInputFiles({name:'race-bundle.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bundle))})
+  await expect.poll(()=>Boolean(release)).toBe(true)
+  await page.locator('.library-row').filter({hasText:b.input.title}).getByRole('button',{name:'Open',exact:true}).click()
+  await expect(page.locator('.breadcrumbs')).toContainText(b.id)
+  release!()
+  await expect.poll(()=>finished).toBe(true)
+  await page.getByRole('button',{name:'Snapshot JSON',exact:true}).click()
+  expect(JSON.parse(await page.getByLabel('Investigation JSON').inputValue()).title).toBe(b.input.title)
+})
+
+test('a maximum-length title saves its default regression name on the first attempt',async({page})=>{
+  const input=await (await page.request.get('/api/demos/transcript-switch')).json()
+  input.title='L'.repeat(200)
+  const result=await (await page.request.post('/api/investigations',{data:input})).json()
+  await page.goto('/')
+  await page.getByRole('button',{name:'Saved records',exact:true}).click()
+  await page.getByLabel('Search investigations').fill(input.title)
+  await page.locator('.library-row').filter({hasText:result.id}).getByRole('button',{name:'Open',exact:true}).click()
+  await page.getByRole('button',{name:'Regression test',exact:true}).click()
+  await expect(page.getByLabel('Test name')).toHaveValue(`Regression: ${input.title}`.slice(0,200))
+  await page.getByRole('button',{name:'Save regression case',exact:true}).click()
+  await expect(page.getByText('SAVED CASE', {exact:true})).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})

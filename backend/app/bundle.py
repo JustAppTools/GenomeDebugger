@@ -13,6 +13,8 @@ from .models import StrictModel
 from .engine import canonical_json, compare, digest
 from .legacy_engine_v050 import compare as compare_v050
 from .legacy_engine_v060 import compare as compare_v060
+from .legacy_engine_v061 import compare as compare_v061
+from .check_scope import validate_check_variants
 from .limits import MAX_BUNDLE_BYTES
 from .version import ENGINE_VERSION
 from .allele_check import AlleleCheck, replay_allele_check
@@ -181,7 +183,7 @@ def create_bundle(db_path, result: InvestigationResult) -> dict:
 def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord], ReferenceCheck | None, SnpEffCheck | None, AlleleCheck | None]:
     BundleManifest.model_validate(bundle, strict=True)
     if (bundle.get("format") != "GenomeDebugger bundle" or bundle.get("version") != BUNDLE_VERSION or
-            bundle.get("engine_version") not in {"0.5.0", "0.6.0", ENGINE_VERSION}):
+            bundle.get("engine_version") not in {"0.5.0", "0.6.0", "0.6.1", ENGINE_VERSION}):
         raise ValueError("Unsupported bundle format or version")
     entries, hashes = bundle.get("entries"), bundle.get("sha256")
     allowed = {"investigation", "source_record", "source_records", "reference_check", "snpeff_check", "allele_check"}
@@ -192,7 +194,8 @@ def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord]
         if digest(value) != hashes[name]:
             raise ValueError(f"Bundle entry {name} failed its SHA-256 check")
     result = InvestigationResult.model_validate(entries["investigation"])
-    rules = {"0.5.0": compare_v050, "0.6.0": compare_v060, ENGINE_VERSION: compare}[bundle["engine_version"]]
+    rules = {"0.5.0": compare_v050, "0.6.0": compare_v060, "0.6.1": compare_v061,
+             ENGINE_VERSION: compare}[bundle["engine_version"]]
     if result.engine_version != bundle["engine_version"] or result != rules(result.input):
         raise ValueError("Investigation result does not match a replay of its declared engine version")
     if "source_record" in entries and "source_records" in entries:
@@ -244,6 +247,8 @@ def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord]
         reference_summary.hgvs_matches != check.hgvs_matches or
         reference_summary.status != check.status):
         raise ValueError("Bundle NCBI check does not match its investigation summary")
+    if check:
+        validate_check_variants(result.input, source_map[check.source_record_id], "NCBI reference")
     if snpeff and (snpeff.source_record_id not in source_map or snpeff.source_response_sha256 != source_map[snpeff.source_record_id].source_response_sha256):
         raise ValueError("Bundle SnpEff check does not match its source record")
     annotation_summary = result.input.annotation_check
@@ -259,5 +264,6 @@ def verify_bundle(bundle: dict) -> tuple[InvestigationResult, list[SourceRecord]
     if snpeff and not annotation_summary:
         raise ValueError("Bundle includes a SnpEff check not linked by the investigation")
     if snpeff:
+        validate_check_variants(result.input, source_map[snpeff.source_record_id], "SnpEff annotation")
         _verify_snpeff(source_map[snpeff.source_record_id], snpeff)
     return result, sources, check, snpeff, allele_check
