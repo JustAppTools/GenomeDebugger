@@ -2,21 +2,30 @@ from __future__ import annotations
 
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from .unicode_text import validate_json_values
+
+MAX_ADDITIONAL_ANNOTATIONS = 1000
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode='before')
+    @classmethod
+    def valid_unicode(cls, value):
+        validate_json_values(value)
+        return value
+
 
 class ReferenceContext(StrictModel):
-    start: int = Field(ge=1)
+    start: int = Field(ge=1, strict=True)
     sequence: str = Field(min_length=1, max_length=10000, pattern=r"^[ACGT]+$")
 
 
 class Variant(StrictModel):
     assembly: str = Field(min_length=1, max_length=50)
     sequence_id: str = Field(min_length=1, max_length=100)
-    position: int = Field(ge=1, description="One-based genomic coordinate")
+    position: int = Field(ge=1, strict=True, description="One-based genomic coordinate")
     ref: str = Field(min_length=1, max_length=100, pattern=r"^[ACGT]+$")
     alt: str = Field(min_length=1, max_length=100, pattern=r"^[ACGT]+$")
     reference_context: ReferenceContext | None = None
@@ -87,7 +96,7 @@ class Snapshot(StrictModel):
     label: str = Field(min_length=1, max_length=150)
     variant: Variant
     annotation: Annotation
-    annotations: list[Annotation] = Field(default_factory=list, max_length=1000, description="Additional annotation rows for this variant")
+    annotations: list[Annotation] = Field(default_factory=list, max_length=MAX_ADDITIONAL_ANNOTATIONS, description="Additional annotation rows for this variant")
     variant_records: list[VariantRecord] = Field(default_factory=list, max_length=50, description="Additional variants and their annotation rows")
     provenance: Provenance
 
@@ -148,15 +157,15 @@ class ReferenceCheckSummary(StrictModel):
 
 
 class AnnotationCheckSummary(StrictModel):
-    id: str
-    source_record_id: str
+    id: str = Field(min_length=1, max_length=100)
+    source_record_id: str = Field(min_length=1, max_length=100)
     source_response_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     vcf_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    snpeff_version: str
-    genome_database: str
+    snpeff_version: str = Field(min_length=1, max_length=100)
+    genome_database: str = Field(min_length=1, max_length=100)
     database_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     status: Literal["agree", "disagree", "unresolved"]
-    matched_transcripts: int = Field(ge=0)
+    matched_transcripts: int = Field(ge=0, strict=True)
 
 
 class InvestigationInput(StrictModel):

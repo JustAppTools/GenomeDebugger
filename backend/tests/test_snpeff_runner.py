@@ -36,7 +36,7 @@ def test_local_runner_checks_artifacts_and_records_execution(tmp_path,monkeypatc
         calls.append((command,kwargs))
         assert '-nodownload' in command and '-noLog' in command and '-noStats' in command
         calls[-1] += (Path(command[-1]).read_bytes(),)
-        return SimpleNamespace(returncode=0,stdout=VCF,stderr='')
+        return SimpleNamespace(returncode=0,stdout=VCF.encode('utf-8'),stderr=b'')
     monkeypatch.setattr('app.snpeff_runner.subprocess.run',run)
     source=record()
     check=run_snpeff(source)

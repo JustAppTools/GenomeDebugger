@@ -14,7 +14,7 @@ from .ncbi import EUTILS, VARIATION, ReferenceCheckError, _get, _json, _manifest
 
 class SPDI(StrictModel):
     seq_id: str
-    position: int = Field(ge=0)
+    position: int = Field(ge=0, strict=True)
     deleted_sequence: str = Field(max_length=10000, pattern=r"^[ACGT]*$")
     inserted_sequence: str = Field(max_length=10000, pattern=r"^[ACGT]*$")
 
@@ -68,6 +68,8 @@ def _target(variant: Variant) -> tuple[str, str]:
         raise ReferenceCheckError("Reference-backed identity currently requires pinned GRCh38.p14 primary sequences")
     for chromosome, entry in manifest["chromosomes"].items():
         if variant.sequence_id in {chromosome, entry["refseq_accession"]}:
+            if chromosome == "MT":
+                raise ReferenceCheckError("Mitochondrial alleles are outside this primary nuclear reference check")
             if entry.get("genbank_refseq_relationship") != "=" or variant.position+len(variant.ref)-1 > entry["length"]:
                 raise ReferenceCheckError("Variant lies outside the pinned reference sequence")
             accession = entry["refseq_accession"]
@@ -119,6 +121,8 @@ def _observation(variant: Variant, fasta: str, contextual: dict | None, hgvs: di
 
 
 def replay_allele_check(result: InvestigationResult, observations: list[AlleleObservation], checked_at: str) -> AlleleCheck:
+    if result.input.synthetic:
+        raise ReferenceCheckError("Synthetic fixtures cannot be checked as public reference observations")
     if len(observations) != 2:
         raise ReferenceCheckError("An allele identity check requires two observations")
     rebuilt = [_observation(snapshot.variant, saved.reference_fasta, saved.contextual_response, saved.hgvs_response)
@@ -135,6 +139,11 @@ def replay_allele_check(result: InvestigationResult, observations: list[AlleleOb
                            if agrees else "The submitted reference or normalized contextual allele differs between the two analyses."),
             "observations":[item.model_dump(mode="json") for item in rebuilt]}
     return AlleleCheck(id=digest(data)[:20], **data)
+
+
+def validate_saved_allele_check(result: InvestigationResult, check: AlleleCheck) -> None:
+    if replay_allele_check(result, check.observations, check.checked_at) != check:
+        raise ValueError("Saved allele check does not match its preserved observations")
 
 
 def fetch_allele_check(result: InvestigationResult, client: httpx.Client | None = None) -> AlleleCheck:

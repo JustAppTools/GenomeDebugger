@@ -1,3 +1,4 @@
+import {openSourceTools,prepareGuided} from './workspace-helpers'
 import {expect,test,type Page} from '@playwright/test'
 import {readFile} from 'node:fs/promises'
 
@@ -30,7 +31,7 @@ test('public transcript changes preserve the new selection when an old compariso
   const newA=source.transcripts.find((row:{transcript_id:string})=>![oldA,oldB].includes(row.transcript_id)).transcript_id
   await page.getByLabel('Analysis A transcript',{exact:true}).selectOption(newA)
   release!()
-  await expect(page.getByRole('status')).toContainText('Transcript selection changed while comparing')
+  await expect(page.getByRole('status')).toContainText('supporting checks changed while comparing')
   await expect(page.getByLabel('Analysis A transcript',{exact:true})).toHaveValue(newA)
   await expect(page.getByRole('heading',{name:'Compared analyses',exact:true})).toHaveCount(0)
   await page.unroute(url)
@@ -51,13 +52,18 @@ test('preserved transcript changes preserve the new selection when an old compar
   })
   await page.goto('/')
   await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openSourceTools(page,'history')
   await page.getByRole('button',{name:'Load preserved sources',exact:true}).click()
+  await openSourceTools(page,'history')
   await page.getByLabel('Preserved analysis 1 source').selectOption(source.id)
+  await openSourceTools(page,'history')
   await page.getByLabel('Preserved analysis 2 source').selectOption(source.id)
+  await openSourceTools(page,'history')
   await page.getByLabel('Preserved analysis 2 transcript').selectOption(source.transcripts[1].transcript_id)
   await page.getByRole('button',{name:'Compare preserved sources',exact:true}).click()
   await expect.poll(()=>Boolean(release)).toBe(true)
   const newA=source.transcripts[2].transcript_id
+  await openSourceTools(page,'history')
   await page.getByLabel('Preserved analysis 1 transcript').selectOption(newA)
   release!()
   await expect(page.getByRole('status')).toContainText('Selection changed while comparing')
@@ -77,9 +83,11 @@ test('guided mode accepts a Unicode title within the API character limit',async(
   expect((await page.request.post('/api/investigations',{data:input})).ok()).toBe(true)
   await page.goto('/')
   await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   await page.getByLabel('Investigation JSON').fill(JSON.stringify(input))
   await page.getByRole('button',{name:'Guided form',exact:true}).click()
+  await prepareGuided(page)
   await expect(page.getByRole('button',{name:'Compare analyses',exact:true})).toBeEnabled()
   await page.getByRole('button',{name:'Compare analyses',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Compared analyses',exact:true})).toBeVisible()

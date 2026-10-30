@@ -7,6 +7,7 @@ import json
 import re
 import threading
 import time
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -15,8 +16,9 @@ import httpx
 from pydantic import model_validator
 from .ensembl import SourceRecord
 from .models import StrictModel
+from .json_text import parse_json
 
-MANIFEST_PATH = Path(__file__).resolve().parents[2] / "fixtures" / "grch38-p14-primary-chromosomes.json"
+MANIFEST_PATH = Path(os.environ.get('GENOMEDEBUGGER_RESOURCES', str(Path(__file__).resolve().parents[2]))) / "fixtures" / "grch38-p14-primary-chromosomes.json"
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 VARIATION = "https://api.ncbi.nlm.nih.gov/variation/v0"
 _rate_lock = threading.Lock()
@@ -108,9 +110,9 @@ def _get(client: httpx.Client, url: str, *, variation: bool = False) -> httpx.Re
 def _json(client: httpx.Client, url: str, *, variation: bool = False) -> dict:
     response = _get(client, url, variation=variation)
     try:
-        result = response.json()
+        result = parse_json(response.content)
     except ValueError as exc:
-        raise ReferenceCheckError("NCBI returned invalid JSON") from exc
+        raise ReferenceCheckError("NCBI returned invalid JSON, text, or numeric data") from exc
     if not isinstance(result, dict) or not isinstance(result.get("data"), dict):
         raise ReferenceCheckError("NCBI returned an unexpected variation response")
     return result
@@ -164,14 +166,16 @@ def replay_reference_check(record: SourceRecord, fasta: str, contextual: dict | 
         if not all(isinstance(value, dict) and isinstance(value.get("data"), dict) for value in (contextual, hgvs_result)):
             raise ReferenceCheckError("NCBI notation responses are missing or malformed")
         data = contextual["data"]
-        if all(key in data for key in ("seq_id", "position", "deleted_sequence", "inserted_sequence")):
-            if (not isinstance(data["seq_id"], str) or type(data["position"]) is not int or
-                    not isinstance(data["deleted_sequence"], str) or not isinstance(data["inserted_sequence"], str)):
-                raise ReferenceCheckError("NCBI returned invalid SPDI fields")
-            observed_spdi = f"{data['seq_id']}:{data['position']}:{data['deleted_sequence']}:{data['inserted_sequence']}"
+        if (not isinstance(data.get('seq_id'), str) or not data['seq_id'].strip() or
+                type(data.get('position')) is not int or data['position'] < 0 or
+                any(not isinstance(data.get(key), str) or not re.fullmatch(r'[ACGT]*', data[key])
+                    for key in ('deleted_sequence', 'inserted_sequence')) or
+                data['deleted_sequence'] == data['inserted_sequence']):
+            raise ReferenceCheckError('NCBI returned missing or invalid SPDI fields')
+        observed_spdi = f"{data['seq_id']}:{data['position']}:{data['deleted_sequence']}:{data['inserted_sequence']}"
         observed_hgvs = hgvs_result["data"].get("hgvs")
-        if observed_hgvs is not None and not isinstance(observed_hgvs, str):
-            raise ReferenceCheckError("NCBI returned an invalid HGVS value")
+        if not isinstance(observed_hgvs, str) or not re.fullmatch(r'[^:\s]+:g\.\S+', observed_hgvs):
+            raise ReferenceCheckError("NCBI returned a missing or invalid HGVS value")
     elif contextual is not None or hgvs_result is not None:
         raise ReferenceCheckError("NCBI notation responses must be absent after a reference disagreement")
     spdi_matches = observed_spdi == metadata["expected_spdi"]
@@ -189,6 +193,13 @@ def replay_reference_check(record: SourceRecord, fasta: str, contextual: dict | 
         status="agree" if all((reference_matches, spdi_matches, hgvs_matches)) else "disagree")
 
 
+def validate_saved_reference_check(record: SourceRecord, check: ReferenceCheck) -> None:
+    replay = replay_reference_check(record, check.reference_fasta, check.contextual_response,
+                                    check.hgvs_response, check.checked_at)
+    if replay != check:
+        raise ReferenceCheckError('Saved NCBI check does not match its preserved observations')
+
+
 def fetch_reference_check(record: SourceRecord, client: httpx.Client | None = None) -> ReferenceCheck:
     metadata = _reference_metadata(record)
     owns_client = client is None
@@ -203,6 +214,8 @@ def fetch_reference_check(record: SourceRecord, client: httpx.Client | None = No
             contextual = _json(client, metadata["contextual_uri"], variation=owns_client)
             hgvs_result = _json(client, metadata["hgvs_uri"], variation=owns_client)
         return replay_reference_check(record, fasta, contextual, hgvs_result, datetime.now(timezone.utc).isoformat())
+    except ValueError as exc:
+        raise ReferenceCheckError('NCBI returned invalid reference or notation data') from exc
     finally:
         if owns_client:
             client.close()

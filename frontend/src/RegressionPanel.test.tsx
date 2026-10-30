@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import RegressionPanel from './RegressionPanel'
 import type { Result } from './types'
@@ -21,6 +21,7 @@ test('saves a case, passes pinned replay, then shows a candidate failure', async
     .mockResolvedValueOnce({ok:true,json:async()=>failed})
   vi.stubGlobal('fetch',fetchMock)
   render(<RegressionPanel result={result}/>)
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Save regression case'})).toBeEnabled())
   fireEvent.click(screen.getByRole('button',{name:'Save regression case'}))
   expect(await screen.findByText('SAVED CASE')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:'Run pinned baseline'}))
@@ -42,6 +43,7 @@ test.each([{label:'ASCII',title:'A'.repeat(200)},{label:'Unicode',title:'🧬'.r
   const name=screen.getByLabelText('Test name') as HTMLInputElement
   expect(Array.from(name.value)).toHaveLength(200)
   expect(name.value).toBe(Array.from(`Regression: ${title}`).slice(0,200).join(''))
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Save regression case'})).toBeEnabled())
   fireEvent.click(screen.getByRole('button',{name:'Save regression case'}))
   expect(await screen.findByRole('alert')).toHaveTextContent('name: Specific name validation error')
   expect(JSON.parse(fetchMock.mock.calls[1][1].body).name).toBe(name.value)
@@ -49,4 +51,40 @@ test.each([{label:'ASCII',title:'A'.repeat(200)},{label:'Unicode',title:'🧬'.r
   expect(screen.getByRole('button',{name:'Save regression case'})).toBeDisabled()
   fireEvent.change(name,{target:{value:'A'.repeat(201)}})
   expect(screen.getByRole('button',{name:'Save regression case'})).toBeDisabled()
+})
+
+test('older history uses a stable run anchor and deduplicates overlapping responses',async()=>{
+  const result={id:'investigation',input:{title:'History',snapshots:[]},identity:{status:'verified'},differences:[],findings:[],input_sha256:'hash'} as unknown as Result
+  const regressionCase={id:'case',name:'History',source_investigation:result}
+  const row=(i:number)=>({id:`run-${i}`,mode:'pinned',status:'passed',created_at:'2026-10-20T00:00:00Z'})
+  const fetchMock=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>[{id:'case',source_investigation_id:'investigation'}]})
+    .mockResolvedValueOnce({ok:true,json:async()=>regressionCase})
+    .mockResolvedValueOnce({ok:true,json:async()=>Array.from({length:100},(_,i)=>row(100-i))})
+    .mockResolvedValueOnce({ok:true,json:async()=>[row(1),row(0)]})
+  vi.stubGlobal('fetch',fetchMock)
+  render(<RegressionPanel result={result}/>)
+  fireEvent.click(await screen.findByRole('button',{name:'Load older runs'}))
+  await screen.findByText('run-0')
+  expect(fetchMock).toHaveBeenLastCalledWith('/api/regression-cases/case/runs?before=run-1&limit=100')
+  expect(document.querySelectorAll('.history-list button')).toHaveLength(101)
+  expect(screen.getAllByText('run-1')).toHaveLength(1)
+})
+
+test('every baseline remains selectable beyond the first discovery page',async()=>{
+  const result={id:'investigation',input:{title:'History',snapshots:[]},identity:{status:'verified'},differences:[],findings:[],input_sha256:'hash'} as unknown as Result
+  const fetchMock=vi.fn().mockImplementation(async(url:string)=>{
+    if(url.includes('?source_investigation_id='))return {ok:true,json:async()=>url.includes('offset=100')
+      ?[{id:'oldest',name:'Oldest baseline',source_investigation_id:result.id}]
+      :Array.from({length:100},(_,i)=>({id:`case-${i}`,name:`Baseline ${i}`,source_investigation_id:result.id}))}
+    if(url.endsWith('/runs'))return {ok:true,json:async()=>[]}
+    const id=url.split('/').at(-1)!
+    return {ok:true,json:async()=>({id,name:id==='oldest'?'Oldest baseline':id,source_investigation:result})}
+  })
+  vi.stubGlobal('fetch',fetchMock)
+  render(<RegressionPanel result={result}/>)
+  await waitFor(()=>expect(screen.getByLabelText('Saved baseline')).toBeEnabled())
+  expect(screen.getByLabelText('Saved baseline').querySelectorAll('option')).toHaveLength(101)
+  fireEvent.change(screen.getByLabelText('Saved baseline'),{target:{value:'oldest'}})
+  await waitFor(()=>expect(document.querySelector('.case-record')).toHaveTextContent('Oldest baseline'))
+  expect(screen.getByLabelText('Saved baseline')).toHaveValue('oldest')
 })

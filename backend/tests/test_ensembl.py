@@ -44,7 +44,7 @@ def test_documented_snv_is_validated_and_transcripts_can_be_compared():
     assert any(d.field == "consequence" for d in result.differences)
     assert result.findings[0].status == "possible"
     assert payload.snapshots[0].provenance.source_uri == record.source_uri
-    report = markdown_report(result)
+    report = markdown_report(result, sources=[record])
     assert "Data type: CURRENT PUBLIC SOURCE" in report
     assert record.source_response_sha256 in report
     assert "do not establish historical causation" in report

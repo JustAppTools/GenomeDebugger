@@ -49,7 +49,7 @@ def test_old_database_migrates_and_backup_is_restorable(tmp_path, monkeypatch):
     client = TestClient(main.app)
     result = client.post("/api/investigations", json=json.loads(FIXTURE.read_text())).json()
     with sqlite3.connect(old) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
         assert db.execute("SELECT created_at FROM investigations WHERE id = ?", (result["id"],)).fetchone()[0]
     restored = tmp_path / "backups" / "backup.db"
     backup(old, restored)
@@ -158,7 +158,7 @@ def test_archived_v050_bundle_remains_verifiable_and_has_separate_record_id(tmp_
         verify_bundle(bundle)
 
 
-def test_large_export_is_importable_while_input_limit_stays_one_mb(tmp_path, monkeypatch):
+def test_large_export_is_importable_with_bounded_input_requests(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DB", tmp_path / "large.db")
     client = TestClient(main.app)
     data = json.loads(FIXTURE.read_text())
@@ -173,4 +173,4 @@ def test_large_export_is_importable_while_input_limit_stays_one_mb(tmp_path, mon
     assert client.post("/api/bundles/verify", content=bundle.content, headers={"Content-Type":"application/json"}).status_code == 200
     monkeypatch.setattr(main, "DB", tmp_path / "imported.db")
     assert client.post("/api/bundles/import", content=bundle.content, headers={"Content-Type":"application/json"}).status_code == 200
-    assert client.post("/api/investigations", content=b' ' * 1_000_001).status_code == 413
+    assert client.post("/api/investigations", content=b' ' * 2_000_001).status_code == 413

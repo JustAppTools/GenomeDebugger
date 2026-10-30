@@ -30,7 +30,7 @@ test('loads a demo, compares snapshots, and opens replay evidence', async () => 
   expect(await screen.findByText('Controlled replay matches.')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button',{name:/view test/i}))
   expect(await screen.findByText('Deterministic lookup replay')).toBeInTheDocument()
-  expect(fetchMock).toHaveBeenCalledTimes(6)
+  expect(fetchMock.mock.calls.filter(([url,options])=>url==='/api/investigations'&&options?.method==='POST')).toHaveLength(2)
 })
 
 test('shows a useful error and leaves demo input editable if comparison fails', async () => {

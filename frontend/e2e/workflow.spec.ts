@@ -1,17 +1,21 @@
+import {openSourceTools,prepareExample,prepareGuided} from './workspace-helpers'
 import { expect, test } from '@playwright/test'
 import { readFile, stat } from 'node:fs/promises'
 
 test('demo, evidence, regression, and portable bundle work through the browser', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByText('Local engine connected')).toBeVisible()
-  await page.getByRole('button', { name: 'Try an example' }).first().click()
+  await prepareExample(page)
+  await page.getByRole('button', { name: /^Try (?:an )?example(?: again)?$/ }).first().click()
   await expect(page.getByRole('heading', { name: 'Compared analyses' })).toBeVisible()
   await page.getByText('Show technical details',{exact:true}).click()
   await expect(page.getByText('Changing only the selected transcript reproduces')).toBeVisible()
   await page.getByRole('button', { name: /Changes 6/ }).click()
   await expect(page.getByRole('button', { name: 'Inspect' }).first()).toBeVisible()
   await page.getByRole('button', { name: 'Inspect' }).first().click()
-  await expect(page.getByRole('heading', { name: /Observed .* values/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Evidence inspector', exact: true })).toBeVisible()
+  await expect(page.locator('.evidence-detail h3')).toContainText('changed')
+  await expect(page.getByRole('heading', { name: 'Conclusions using this record' })).toBeVisible()
 
   await page.getByRole('complementary').getByRole('button', { name: 'Saved tests' }).click()
   await page.getByRole('button', { name: 'Save regression case' }).click()
@@ -40,6 +44,7 @@ test('mobile guide retains context start and blocks incomplete input', async ({ 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await page.getByRole('button', { name: 'Enter results' }).click()
+  await prepareGuided(page)
   await page.getByLabel('Analysis 1 context start').fill('99')
   await expect(page.getByLabel('Analysis 1 context start')).toHaveValue('99')
   await page.getByLabel('Analysis 1 reference sequence').fill('GACGTACG')
@@ -57,6 +62,12 @@ test('offline and empty public cache states explain the failure', async ({ page 
   await page.reload()
   await expect(page.getByText('Local engine connected')).toBeVisible()
   await page.getByRole('button', { name: 'Look up a DNA change' }).click()
+  // Use an uncached query: other workflows deliberately preserve the default
+  // example in the shared, isolated browser-test database.
+  await page.getByLabel('Chromosome',{exact:true}).fill('22')
+  await page.getByLabel('Position',{exact:true}).fill('424242')
+  await page.getByLabel('Reference allele',{exact:true}).fill('A')
+  await page.getByLabel('Alternate allele',{exact:true}).fill('C')
   await page.getByRole('button', { name: 'Load cached' }).click()
   await expect(page.getByRole('alert')).toContainText('No local Ensembl record is cached')
 })
@@ -66,18 +77,23 @@ test('malformed JSON stays editable and guided input supports multiple variants'
   demo.snapshots[0].variant.reference_context.sequence = 123
   await page.goto('/')
   await page.getByRole('button',{name:'Enter results'}).click()
+  await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   const malformed = JSON.stringify(demo)
   await page.getByLabel('Investigation JSON').fill(malformed)
   await page.getByRole('button',{name:'Guided form',exact:true}).click()
+  await prepareGuided(page)
   await expect(page.getByRole('alert')).toContainText('sequence must be text')
   await expect(page.getByLabel('Investigation JSON')).toHaveValue(malformed)
   demo.snapshots[0].variant.reference_context.sequence = 'GACGTACG'
   await page.getByLabel('Investigation JSON').fill(JSON.stringify(demo))
   await page.getByRole('button',{name:'Guided form',exact:true}).click()
+  await prepareGuided(page)
   for (const [side,index] of [['A',1],['B',2]] as const) {
     await page.getByRole('button',{name:`Add variant to analysis ${side}`,exact:true}).click()
     const prefix = `Analysis ${index} variant 2`
+    await page.getByLabel(`${prefix} assembly`,{exact:true}).fill('GRCh38')
+    await page.getByLabel(`${prefix} sequence accession`,{exact:true}).fill('NC_000001.11')
     await page.getByLabel(`${prefix} position`,{exact:true}).fill('104')
     await page.getByLabel(`${prefix} reference`,{exact:true}).fill('T')
     await page.getByLabel(`${prefix} alternate`,{exact:true}).fill('G')
@@ -119,6 +135,7 @@ test('historical output import compares two preserved artifacts and bundles both
   const raw=JSON.stringify([fixture.source.source_response])
   await page.goto('/')
   await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openSourceTools(page,'history')
   await page.getByText('Import historical VEP output',{exact:true}).click()
   await page.getByLabel('Historical VEP JSON file').setInputFiles({name:'historical-fixture.json',mimeType:'application/json',buffer:Buffer.from(raw)})
   await page.getByLabel('Historical Ensembl release').fill('110')
@@ -127,14 +144,22 @@ test('historical output import compares two preserved artifacts and bundles both
   await page.getByLabel('Historical artifact source').fill('UI fixture; not a historical biological assertion')
   await page.getByRole('button',{name:'Preserve historical output',exact:true}).click()
   await expect(page.getByRole('status')).toContainText('Historical output preserved')
+  const firstHistorical=await page.getByLabel('Preserved analysis 1 source').inputValue()
   const changed=structuredClone(fixture.source.source_response)
   changed.transcript_consequences[0].consequence_terms=['missense_variant']
   const imported=await page.request.post('/api/sources/historical-vep',{data:{query:fixture.source.query,
     raw_json:JSON.stringify([changed]),source_release:111,tool_version:'111-ui-fixture',generated_at:'2025-01-01T12:00:00Z',
     assembly_accession:fixture.source.assembly_accession,source_uri:'UI fixture; changed consequence'}})
   expect(imported.ok()).toBe(true)
+  await openSourceTools(page,'history')
   await page.getByRole('button',{name:'Load preserved sources',exact:true}).click()
-  await expect(page.getByLabel('Preserved analysis 1 source')).toHaveValue((await imported.json()).id)
+  const secondHistorical=(await imported.json()).id
+  await expect(page.getByLabel('Preserved analysis 1 source').locator(`option[value="${secondHistorical}"]`)).toHaveCount(1)
+  await expect(page.getByLabel('Preserved analysis 1 source')).toHaveValue(firstHistorical)
+  await openSourceTools(page,'history')
+  await page.getByLabel('Preserved analysis 1 source').selectOption(secondHistorical)
+  await openSourceTools(page,'history')
+  await page.getByLabel('Preserved analysis 2 source').selectOption(firstHistorical)
   await page.getByRole('button',{name:'Compare preserved sources',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
   const promise=page.waitForEvent('download')
@@ -147,9 +172,11 @@ test('historical output import compares two preserved artifacts and bundles both
 
 test('editing during a comparison keeps the newer draft visibly stale',async({page})=>{
   await page.goto('/')
-  await page.getByRole('button',{name:'Try an example',exact:true}).first().click()
+  await prepareExample(page)
+  await page.getByRole('button',{name:/^Try (?:an )?example(?: again)?$/}).first().click()
   await page.getByRole('heading',{name:'Compared analyses'}).waitFor()
   await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   const submitted=JSON.parse(await page.getByLabel('Investigation JSON').inputValue())
   submitted.title='Submitted draft revision'
@@ -169,6 +196,7 @@ test('editing during a comparison keeps the newer draft visibly stale',async({pa
   await page.getByRole('heading',{name:'Compared analyses'}).waitFor()
   await expect(page.getByRole('status')).toContainText('input has changed')
   await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   expect(JSON.parse(await page.getByLabel('Investigation JSON').inputValue()).title).toBe(edited.title)
 })
@@ -202,9 +230,11 @@ test('valid omitted defaults work in both JSON and guided modes',async({page})=>
   input.title='Defaulted non-synthetic input'
   await page.goto('/')
   await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   await page.getByLabel('Investigation JSON').fill(JSON.stringify(input))
   await page.getByRole('button',{name:'Guided form',exact:true}).click()
+  await prepareGuided(page)
   await expect(page.getByRole('alert')).toHaveCount(0)
   await page.getByRole('button',{name:'Compare analyses',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
@@ -229,7 +259,8 @@ for(const oldFailure of [false,true]) {
     await page.locator('.library-row').filter({hasText:a.input.title}).getByRole('button',{name:'Open',exact:true}).click()
     await expect.poll(()=>Boolean(release)).toBe(true)
     await page.locator('.library-row').filter({hasText:b.input.title}).getByRole('button',{name:'Open',exact:true}).click()
-    await expect(page.locator('.breadcrumbs')).toContainText(b.id)
+    await expect(page).toHaveURL(new RegExp(`/comparison/${b.id}/overview$`))
+    await expect(page.locator('.breadcrumbs')).toContainText(b.input.title)
     release!()
     await expect.poll(()=>finished).toBe(true)
     await page.getByRole('button',{name:'Input JSON',exact:true}).click()
@@ -257,7 +288,8 @@ test('an earlier bundle import cannot replace a later selected investigation',as
   await page.getByLabel('Import replay-checked bundle').setInputFiles({name:'race-bundle.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bundle))})
   await expect.poll(()=>Boolean(release)).toBe(true)
   await page.locator('.library-row').filter({hasText:b.input.title}).getByRole('button',{name:'Open',exact:true}).click()
-  await expect(page.locator('.breadcrumbs')).toContainText(b.id)
+  await expect(page).toHaveURL(new RegExp(`/comparison/${b.id}/overview$`))
+  await expect(page.locator('.breadcrumbs')).toContainText(b.input.title)
   release!()
   await expect.poll(()=>finished).toBe(true)
   await page.getByRole('button',{name:'Input JSON',exact:true}).click()

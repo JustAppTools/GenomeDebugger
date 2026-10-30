@@ -17,13 +17,13 @@ Explicit source actions use `ensembl.py` for current GRCh38 SNVs, `ncbi.py` for 
 - `ReferenceCheck`: source-bound NCBI FASTA, SPDI/HGVS responses, pinned assembly metadata, hashes, agreement flags.
 - `AlleleCheck`: investigation-bound observations for both primary variants, complete ref validation, SPDI/HGVS, URLs/hashes, agree/disagree status. Separate from the stored local-context result.
 - `SnpEffCheck`: ANN VCF, declared metadata, exact transcript matches and unmatched rows, optional recorded local execution/artifact provenance.
-- Bundle version 2: investigation, up to two linked sources, exact linked source checks, optional allele check, entry hashes, engine version. Verification derives observations from responses and replays output. Frozen `legacy_engine_v050.py` and `legacy_engine_v060.py` verify their respective archived engine outputs. Current comparisons use version 0.6.1.
+- Bundle version 2: investigation, up to two linked sources, exact linked source checks, optional allele check, entry hashes, engine version. Verification derives observations from responses and replays output. Frozen `legacy_engine_v050.py` and `legacy_engine_v060.py` verify their respective archived engine outputs. Current comparisons use version 0.6.5, with frozen 0.5.0–0.6.4 replay implementations retained.
 
 ## Boundaries
 
 Local-context identity requires identical declared assembly/accession/context and equal-length substitution edits. Length-changing edits remain unresolved in the pure engine. Independent NCBI checks can establish matching observed contextual alleles on pinned primary nuclear sequences; cross-assembly mapping remains unsupported. Clinical and causal boundaries are described in [scientific-validity.md](scientific-validity.md).
 
-Ordinary POST requests accept 1 MB. Bundle import/verification and compact export share a 32 MB limit. SQLite has a configurable storage budget and backup support. Result IDs include engine version so replay cannot overwrite history. Hashes and replay detect contradictions but do not authenticate external data or imported execution claims. A current API capture never substitutes for a historical artifact.
+Ordinary POST requests accept a 2 MB wire envelope and enforce a 1 MB canonical input-data budget. Bundle import/verification and compact export share a 32 MB limit. SQLite has a configurable storage budget and backup support. Result IDs include engine version so replay cannot overwrite history. Hashes and replay detect contradictions but do not authenticate external data or imported execution claims. A current API capture never substitutes for a historical artifact.
 
 ## 0.6.1 integrity changes
 
@@ -32,3 +32,29 @@ Artifact saves and bundle imports share immutable conflict checks. Bundle import
 Bundle manifests receive strict type validation before verification. Source-generated VEP snapshots must match captured variants and annotation rows; declared full sets cannot omit rows. Historical selected-row formats and the earlier equivalent release label remain supported. A separately named custom tool can cite VEP as an input while recording transformed outputs. SnpEff verification checks derived explanatory prose as well as structured outcomes.
 
 The local runner permits reviewed database/build combinations, requires matching source assembly metadata, and hashes the exact input bytes it writes. Execution records retain assembly name and accession. Browser responses are associated with draft/query revisions; obsolete source replies cannot reactivate old comparisons. Regression discovery uses a source-investigation filter and lists expose pagination.
+
+
+## 0.8.0 workflow and organization layer
+
+The comparison core is unchanged. `tabular_import.py` validates explicit annotated CSV/TSV pairs without performing external requests or guessing scientific fields. Original UTF-8 text is included in input provenance; importer bookkeeping priority overrides are explicit. `identifier.py` previews current Ensembl mappings and returns every supported forward-strand GRCh38 SNV choice for deliberate selection, rather than silently changing a query.
+
+SQLite schema 3 adds `investigation_labels`, separate from immutable investigation JSON. `workspace.py` provides organization, filtered/sorted cursor paging, compact SQL-projected summaries, storage information, and transactional label updates. Archive flags retain the scientific record; deletion remains a separate protected operation. Backup download uses SQLite's consistent backup facility. Restoration validates a stopped database and preserves its prior copy.
+
+The frontend separates result explanation from raw records, uses hash routes for local bookmarks, and keeps explicitly saved browser drafts outside completed scientific records. HTML reports escape supplied content and render in a sandboxed preview. Local voluntary feedback has no external collection.
+
+The optional desktop entry point serves the built UI from FastAPI on a loopback origin with a bundled Python runtime. Its default data folder is distinct from the development database. Public hosting and accounts are not enabled. See the desktop guide for source verification versus the unverified frozen-executable launch.
+
+
+## Application 0.8.1 corrections
+
+Tabular overview anchors use canonical variant and annotation identifier order, with original file bytes retained separately. Library flag updates merge only supplied fields under a write transaction; full editor saves compare a deterministic label fingerprint and return 409 on conflict. GET label details supplies current organization metadata for Recent. Compact UTF-8 cursors and signed-integer bounds make paging admission consistent. Restore validates and migrates an isolated SQLite copy before preserving/replacing the destination; schema checks also prevent false healthy responses for incomplete current databases. No comparator or schema-version change was needed.
+
+## Application 0.8.3 / comparator 0.6.7
+
+Saved regression runs now declare an assertion version independently of their input format. Restore reconstructs complete assertion sets from the saved baseline and historical candidate result using frozen rule layouts, including both original 0.6.3 layouts. New comparator 0.6.7 canonicalizes supported compound consequence separators; archived comparator 0.6.6 keeps prior results verifiable. App-memory draft stores and shared library-save subscriptions preserve edits across component lifetimes. Browser regression tests serve the compiled interface with separate backend/database instances per browser project.
+
+Imported tabular snapshots are complete row collections. Their display anchors are excluded from selector comparisons; all represented variants/annotations are matched by explicit keys. Aggregate collection identity covers every represented key and its supplied context. Same-variant transcript attribution requires verified identity. Source locations and input hashes are provenance differences with low default priority. Frozen 0.6.5 rules preserve prior bundle verification.
+
+Every server holds a database-specific operating-system lock for its lifespan; offline restore takes the same lock independently of port. Staged restore checks original comparator replay, linked evidence, SQL indexes, ownership, and record relationships. Frozen original models/rules handle supported pre-versioned records without rewriting their serialization.
+
+Library details use a separate text-details fingerprint; flags remain independent partial updates. Unsaved per-record editor drafts live in the App session and survive section switches, with a page-close warning. Local-date filtering passes an explicit midnight instant and compares normalized timestamps. Input staleness compares normalized JSON content. HTML reports inventory unchanged and changed rows with escaped values.

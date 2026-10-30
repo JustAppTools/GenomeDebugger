@@ -28,7 +28,7 @@ def test_api_rejects_bad_schema_and_missing_record(tmp_path, monkeypatch):
     client = TestClient(main.app)
     assert client.post("/api/investigations", json={"title": "x", "snapshots": []}).status_code == 422
     assert client.get("/api/investigations/no-such-id").status_code == 404
-    assert client.post("/api/investigations", content=b" " * 1_000_001, headers={"content-type": "application/json"}).status_code == 413
+    assert client.post("/api/investigations", content=b" " * 2_000_001, headers={"content-type": "application/json"}).status_code == 413
 
 
 def test_removed_game_endpoints_are_unavailable():

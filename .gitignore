@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 *.pyc
 *.db
+*.db.lock
 node_modules/
 dist/
 .env
@@ -12,3 +13,5 @@ coverage/
 frontend/test-results/
 frontend/playwright-report/
 /tools/
+/release/
+/.build/

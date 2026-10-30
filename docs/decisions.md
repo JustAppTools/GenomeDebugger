@@ -33,3 +33,29 @@ Pin the GRCh38.p14 primary-chromosome accession mapping from NCBI's assembly rep
 An exported bundle contains a result recomputed with the current engine. Import recomputes it again, validates preserved response hashes and derived IDs, and refuses a conflicting investigation ID. A previous saved result remains in the local database; its portable export receives the current input hash and ID. These checks detect inconsistent or changed bundle contents, but self-contained hashes do not authenticate who supplied external data.
 
 Extra variants in a snapshot match only by exact submitted representation. A local repeat-context edit comparison may show matching edited sequence, but it is not enough to upgrade indel identity without a validated assembly reference and standards-aware normalization. The user supplied SnpEff VCF comparison similarly reports transcript output agreement without claiming an authenticated second engine run or causal explanation.
+
+
+## 2026-10-26: Simplify the journey without weakening scientific records
+
+Keep exact inputs, source artifacts, qualitative evidence states, and immutable completed results. Make a specific explanation and readable supporting facts the default presentation, while preserving technical access. New manual inputs start blank for scientific values. Supported imports require declared metadata and preview every accepted row.
+
+Store names, notes, tags, favorites, and archive state in a separate organization table. Do not rewrite an input hash to support a cosmetic rename. Explicit browser-local drafts are a separate opt-in persistence action.
+
+Keep the product local-first. Package a loopback desktop runtime and provide backup/recovery rather than activating a public server or accounts without an explicit hosting/data-access design. Broader assemblies, historical pipeline artifacts, and additional languages require actual reference coverage and a defined audience; interface simplification is not scientific validation.
+
+
+## 2026-10-27: Correct imports and recovery without rewriting investigations
+
+Treat file row order as presentation, not an inferred transcript selection. Use stable identifier anchors and explain that scope while retaining exact original text and hashes. Stage and validate backup restoration before replacing any existing workspace. Use atomic field updates for flags and fingerprint conflicts for editor saves; do not discard active notes to hide a conflict. Existing scientific JSON stays immutable, and corrected CSV comparisons require reimport of actual files rather than guessing lost bytes.
+
+## 2026-10-28: Separate collection semantics, text edits, and workspace ownership
+
+Stable CSV anchors alone cannot represent selection when rows are added. Comparator 0.6.6 compares full imported sets and keeps selection attribution behind established common-variant identity. Preserve 0.6.5 and supported original pre-versioned formats for historical verification; never repair a saved scientific verdict by silently recomputing it.
+
+Restore must own the destination database independently of a port and validate original replay plus relationship/index coherence. Editor text conflicts use text-only fingerprints so an unrelated flag cannot validate stale notes. Keep unsaved library edits in app memory across navigation and warn on closing; do not introduce automatic persistent storage of those drafts.
+
+## 2026-10-29: Rebuild assertions and preserve editing state through navigation
+
+Check the complete saved-test assertions against the baseline and preserved result, rather than trusting a backup's self-consistent verdict. Version new assertion layouts explicitly; use frozen historical layouts for old records. Validate SQL constraints before restore, and keep backup cleanup in the response's exceptional-exit path.
+
+An optional blank control must preserve the declared unavailable state, and reference-context coordinates must come from the user. Keep public-source and candidate edits available while reading Help. Reconcile pending library saves at workspace scope without advancing stale notes through unrelated flag changes. Browser tests use compiled UI and a separate disposable backend/database per browser project so development-server lifetime and shared names cannot invalidate the release checks.

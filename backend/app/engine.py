@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from urllib.parse import quote
 from .models import (
     Difference, Evidence, Finding, IdentityResult, InvestigationInput,
@@ -14,6 +15,12 @@ def canonical_json(value) -> str:
 
 def digest(value) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def canonical_consequence(value: str) -> str:
+    """Term collections are unordered; keep original input bytes in snapshots."""
+    terms = re.split(r'[;&,]', value)
+    return ';'.join(sorted(set(terms))) if all(terms) else value
 
 
 def row_key(row) -> tuple[str, str, str, str]:
@@ -68,8 +75,26 @@ def identity(a: Variant, b: Variant) -> IdentityResult:
 def compare(payload: InvestigationInput) -> InvestigationResult:
     a, b = payload.snapshots
     raw = payload.model_dump(mode="json")
-    evidence = [Evidence(id="identity-inputs", kind="input", description="Assembly, sequence accession, reference context, and submitted alleles", data={"a": a.variant.model_dump(), "b": b.variant.model_dump()})]
+    collection_mode = any(s.provenance.configuration.get('import_format') == 'genomedebugger-tabular-v1'
+                          and s.provenance.configuration.get('row_order_policy') == 'canonical-variant-and-annotation-keys-v1'
+                          for s in (a,b))
+    def all_variants(snapshot):
+        return {variant_key(snapshot.variant): (snapshot.variant, [snapshot.annotation, *snapshot.annotations]),
+                **{variant_key(row.variant): (row.variant,row.annotations) for row in snapshot.variant_records}}
+    complete_a, complete_b = all_variants(a), all_variants(b)
+    evidence = [Evidence(id="identity-inputs", kind="input",
+                         description="Complete represented variant collections; overview rows are display anchors" if collection_mode else "Assembly, sequence accession, reference context, and submitted alleles",
+                         data={"a": [complete_a[key][0].model_dump() for key in sorted(complete_a)] if collection_mode else a.variant.model_dump(),
+                               "b": [complete_b[key][0].model_dump() for key in sorted(complete_b)] if collection_mode else b.variant.model_dump()})]
     ident = identity(a.variant, b.variant)
+    if collection_mode:
+        statuses = [identity(complete_a[key][0], complete_b[key][0]).status for key in complete_a.keys() & complete_b.keys()]
+        status = 'unresolved' if complete_a.keys() != complete_b.keys() or 'unresolved' in statuses else 'rejected' if 'rejected' in statuses else 'verified'
+        explanation = ('Represented variant sets differ; review additions and removals. No single selected variant is declared.'
+                       if complete_a.keys() != complete_b.keys() else
+                       'All represented variants match within the supplied reference contexts; this is not independent reference verification.'
+                       if status == 'verified' else 'At least one represented variant lacks matching supplied reference context; collection identity remains unresolved.')
+        ident = IdentityResult(status=status, explanation=explanation, evidence_ids=['identity-inputs'])
     reference_check = payload.reference_check
     annotation_check = payload.annotation_check
     if reference_check:
@@ -89,6 +114,9 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     differences: list[Difference] = []
 
     def add(field, before, after, category="annotation", meaningful=True):
+        if category == 'annotation' and (field == 'consequence' or field.endswith('.consequence')) and before is not None and after is not None:
+            if canonical_consequence(before) == canonical_consequence(after):
+                return
         if before == after:
             return
         eid = f"diff-{len(differences)+1}"
@@ -101,20 +129,21 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         evidence.append(Evidence(id=eid, kind="field_comparison", description=f"Observed {field} values in the two supplied snapshots", data=data))
         differences.append(Difference(field=field, category=category, before=before, after=after, meaningful=meaningful, evidence_ids=[eid]))
 
-    add("assembly", a.variant.assembly, b.variant.assembly, "identity")
-    add("sequence_id", a.variant.sequence_id, b.variant.sequence_id, "identity")
-    add("position", str(a.variant.position), str(b.variant.position), "representation", ident.status != "verified")
-    add("ref", a.variant.ref, b.variant.ref, "representation", ident.status != "verified")
-    add("alt", a.variant.alt, b.variant.alt, "representation", ident.status != "verified")
-    add("gene_id", a.annotation.gene_id, b.annotation.gene_id)
-    add("transcript_id", a.annotation.transcript_id, b.annotation.transcript_id)
-    add("consequence", a.annotation.consequence, b.annotation.consequence)
-    add("protein_consequence", a.annotation.protein_consequence, b.annotation.protein_consequence)
+    if not collection_mode:
+        add("assembly", a.variant.assembly, b.variant.assembly, "identity")
+        add("sequence_id", a.variant.sequence_id, b.variant.sequence_id, "identity")
+        add("position", str(a.variant.position), str(b.variant.position), "representation", ident.status != "verified")
+        add("ref", a.variant.ref, b.variant.ref, "representation", ident.status != "verified")
+        add("alt", a.variant.alt, b.variant.alt, "representation", ident.status != "verified")
+        add("gene_id", a.annotation.gene_id, b.annotation.gene_id)
+        add("transcript_id", a.annotation.transcript_id, b.annotation.transcript_id)
+        add("consequence", a.annotation.consequence, b.annotation.consequence)
+        add("protein_consequence", a.annotation.protein_consequence, b.annotation.protein_consequence)
     # Selection is compared above; full row sets include the selected row so a
     # different selector does not turn an existing transcript into a missing row.
     primary_aligned = variant_key(a.variant) == variant_key(b.variant) or ident.status == "verified"
-    rows_a = {row_key(row): row for row in (a.annotation, *a.annotations)} if primary_aligned and (a.annotations or b.annotations) else {}
-    rows_b = {row_key(row): row for row in (b.annotation, *b.annotations)} if primary_aligned and (a.annotations or b.annotations) else {}
+    rows_a = {row_key(row): row for row in (a.annotation, *a.annotations)} if not collection_mode and primary_aligned and (a.annotations or b.annotations) else {}
+    rows_b = {row_key(row): row for row in (b.annotation, *b.annotations)} if not collection_mode and primary_aligned and (a.annotations or b.annotations) else {}
     for key in sorted(rows_a.keys() | rows_b.keys()):
         left, right = rows_a.get(key), rows_b.get(key)
         label = row_label(key)
@@ -132,6 +161,8 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     extra_identity_issues: list[str] = []
     variant_rows_a = {variant_key(row.variant): (row.variant, row.annotations) for row in a.variant_records}
     variant_rows_b = {variant_key(row.variant): (row.variant, row.annotations) for row in b.variant_records}
+    if collection_mode:
+        variant_rows_a, variant_rows_b = complete_a, complete_b
     if not primary_aligned and (a.variant_records or b.variant_records):
         # A primary variant is still a member of the complete collection. Keep
         # focus-field comparisons above, then compare like-for-like rows here.
@@ -148,7 +179,7 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         local_identity = identity(left_variant, right_variant)
         identity_eid = f"variant-record-{len(evidence)+1}"
         evidence.append(Evidence(id=identity_eid, kind="input",
-                                 description=f"Additional variant identity within supplied contexts: {label}",
+                                 description=f"{'Represented' if collection_mode else 'Additional'} variant identity within supplied contexts: {label}",
                                  data={"a": left_variant.model_dump(), "b": right_variant.model_dump(),
                                        "status": local_identity.status, "explanation": local_identity.explanation}))
         if local_identity.status != "verified":
@@ -172,9 +203,11 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     add("tool_version", a.provenance.tool_version, b.provenance.tool_version, "provenance")
     add("source_name", a.provenance.source_name, b.provenance.source_name, "provenance")
     add("source_release", a.provenance.source_release, b.provenance.source_release, "provenance")
+    add("source_uri", a.provenance.source_uri, b.provenance.source_uri, "provenance", False)
+    add("input_sha256", a.provenance.input_sha256, b.provenance.input_sha256, "provenance", False)
     for key in sorted(set(a.provenance.configuration) | set(b.provenance.configuration)):
         add(f"configuration.{key}", a.provenance.configuration.get(key), b.provenance.configuration.get(key), "configuration")
-    ac, bc = a.annotation.clinical, b.annotation.clinical
+    ac, bc = (None, None) if collection_mode else (a.annotation.clinical, b.annotation.clinical)
     if ac and bc:
         add("clinical.framework", ac.framework, bc.framework, "clinical_context")
         add("clinical.condition_id", ac.condition_id, bc.condition_id, "clinical_context")
@@ -216,15 +249,20 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
         if ra and rb:
             computed = {"a": ra.model_dump(), "b": rb.model_dump()}
             observed = {"a": {"gene_id": a.annotation.gene_id, "consequence": a.annotation.consequence, "protein_consequence": a.annotation.protein_consequence}, "b": {"gene_id": b.annotation.gene_id, "consequence": b.annotation.consequence, "protein_consequence": b.annotation.protein_consequence}}
-            matches = all(computed[k][field] == observed[k][field] for k in ("a", "b") for field in ("gene_id", "consequence", "protein_consequence"))
+            matches = all((canonical_consequence(computed[k][field]) == canonical_consequence(observed[k][field])
+                           if field == 'consequence' else computed[k][field] == observed[k][field])
+                          for k in ("a", "b") for field in ("gene_id", "consequence", "protein_consequence"))
             eid = "controlled-lookup"
             evidence.append(Evidence(id=eid, kind="controlled_replay", description="Deterministic lookup replay using each selected transcript against one immutable synthetic table", data={"lookup_id": lookup.id, "lookup_sha256": digest(lookup.model_dump()), "computed": computed, "observed": observed, "matches": matches, "held_constant": ["variant identity", "tool/version", "source/release", "configuration"]}))
             if matches:
                 findings.append(Finding(status="verified", cause="transcript selection", explanation="Changing only the selected transcript reproduces the observed annotation change in the supplied synthetic lookup. This verifies the cause within this controlled fixture, not an external annotation system.", affected_fields=consequence_fields, evidence_ids=[eid, "identity-inputs"]))
     if consequence_fields and not any(f.status == "verified" for f in findings):
-        eid = next((d.evidence_ids[0] for d in differences if d.field == "consequence"), differences[0].evidence_ids[0])
-        status = "possible" if a.annotation.transcript_id != b.annotation.transcript_id else "unresolved"
-        findings.append(Finding(status=status, cause="transcript selection" if status == "possible" else "annotation discrepancy", explanation="Transcript selection differs, but no controlled replay established causation." if status == "possible" else "The supplied snapshots do not establish why the annotation changed.", affected_fields=consequence_fields, evidence_ids=[eid]))
+        related = set(consequence_fields) | {'transcript_id'}
+        evidence_ids = [id_ for d in differences if d.field in related for id_ in d.evidence_ids]
+        status = "possible" if ident.status == 'verified' and not collection_mode and a.annotation.transcript_id != b.annotation.transcript_id else "unresolved"
+        findings.append(Finding(status=status, cause="transcript selection" if status == "possible" else "annotation discrepancy", explanation="Transcript selection differs, but no controlled replay established causation." if status == "possible" else "The supplied snapshots do not establish why the annotation changed. Review variant identity before attributing a same-variant cause.", affected_fields=consequence_fields, evidence_ids=evidence_ids))
+    if ident.status == 'rejected':
+        findings.append(Finding(status='unresolved', cause='variant mismatch', explanation='The submitted edits differ. Annotation changes across different edits do not establish a transcript-selection cause.', affected_fields=['variant'], evidence_ids=ident.evidence_ids))
     if any(d.field == "source_release" for d in differences):
         findings.append(Finding(status="possible", cause="source release", explanation="The source release differs. Without preserved source records, the causal data change cannot be reconstructed.", affected_fields=[d.field for d in differences if d.category in ("annotation", "clinical")], evidence_ids=[d.evidence_ids[0] for d in differences if d.field == "source_release"]))
     if ident.status == "unresolved" and not (reference_check and reference_check.status == "disagree"):
@@ -232,7 +270,8 @@ def compare(payload: InvestigationInput) -> InvestigationResult:
     if ac and bc and (ac.framework != bc.framework or ac.condition_id != bc.condition_id):
         findings.append(Finding(status="unresolved", cause="clinical assertion comparability", explanation="Classification values refer to different conditions or frameworks and were not compared directly.", affected_fields=["clinical.classification"], evidence_ids=["clinical-scope"]))
     if not findings and differences:
-        findings.append(Finding(status="unresolved", cause="unexplained change", explanation="Field differences were observed, but no controlled explanation was established.", affected_fields=[d.field for d in differences if d.meaningful], evidence_ids=[differences[0].evidence_ids[0]]))
+        affected = [d for d in differences if d.meaningful] or differences
+        findings.append(Finding(status="unresolved", cause="unexplained change", explanation="Field differences were observed, but no controlled explanation was established.", affected_fields=[d.field for d in affected], evidence_ids=list(dict.fromkeys(id_ for d in affected for id_ in d.evidence_ids))))
     hash_ = digest(raw)
     record_id = digest({"engine_version": ENGINE_VERSION, "input_sha256": hash_})[:16]
     return InvestigationResult(id=record_id, engine_version=ENGINE_VERSION, input=payload, identity=ident, differences=differences, findings=findings, evidence=evidence, input_sha256=hash_)

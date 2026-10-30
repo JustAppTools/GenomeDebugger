@@ -27,3 +27,19 @@ test.each(['reference','compare'])('query changes invalidate an in-flight %s res
   expect(screen.queryByRole('heading',{name:'1:6524705 C→T'})).not.toBeInTheDocument()
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
+
+test('a failed lookup keeps edits made while it was pending',async()=>{
+  let release:((response:unknown)=>void)|undefined
+  const pending=new Promise(resolve=>{release=resolve})
+  let calls=0
+  vi.stubGlobal('fetch',vi.fn().mockImplementation(()=>++calls===1
+    ?Promise.resolve({ok:true,json:async()=>({record,access:'cache'})}):pending))
+  render(<PublicSourcePanel onCompare={vi.fn()}/>)
+  fireEvent.click(screen.getByRole('button',{name:'Load cached'}))
+  await screen.findByLabelText('SnpEff annotated VCF')
+  fireEvent.click(screen.getByRole('button',{name:'Fetch current from Ensembl'}))
+  fireEvent.change(screen.getByLabelText('SnpEff annotated VCF'),{target:{value:'Keep this newer draft'}})
+  release!({ok:false,status:502,json:async()=>({detail:'Upstream unavailable'})})
+  await screen.findByText(/lookup failed after your source workspace changed/)
+  expect(screen.getByLabelText('SnpEff annotated VCF')).toHaveValue('Keep this newer draft')
+})

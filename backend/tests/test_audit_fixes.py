@@ -79,6 +79,16 @@ def test_snpeff_explanation_cannot_contradict_replayed_outcome(tmp_path):
 
 def test_import_conflict_is_rejected_before_any_new_record_is_saved(tmp_path, monkeypatch):
     bundle = source_bundle(tmp_path/'origin.db', annotation=True)
+    # Legacy IDs did not cover declared metadata. Their immutable records still
+    # need conflict protection; new declaration-aware IDs reject this earlier.
+    check = bundle['entries']['snpeff_check']
+    legacy_id = digest({'source':check['source_record_id'], 'vcf':check['vcf_text'], 'checked_at':check['checked_at']})[:20]
+    check['id'] = legacy_id
+    payload = bundle['entries']['investigation']['input']
+    payload['annotation_check']['id'] = legacy_id
+    for snapshot in payload['snapshots']:
+        snapshot['provenance']['configuration']['annotation_check_id'] = legacy_id
+    replace_input(bundle, payload)
     changed = copy.deepcopy(bundle)
     changed['entries']['snpeff_check']['snpeff_version'] = 'DIFFERENT-VERSION'
     payload = changed['entries']['investigation']['input']
@@ -199,6 +209,8 @@ def test_case_discovery_filters_before_pagination(tmp_path,monkeypatch):
     sample = compare(InvestigationInput.model_validate_json(FIXTURE.read_text(encoding='utf-8')))
     other = compare(sample.input.model_copy(update={'title':'Other investigation'}))
     monkeypatch.setattr(main,'DB',tmp_path/'cases.db')
+    storage.save(main.DB, sample)
+    storage.save(main.DB, other)
     original = create_case(sample,'Original baseline');storage.save_case(main.DB,original)
     for i in range(100):storage.save_case(main.DB,create_case(other,f'Newer baseline {i}'))
     api = TestClient(main.app)
@@ -217,13 +229,13 @@ def test_immutable_artifact_conflicts_never_replace_existing_bytes(tmp_path,kind
     elif kind=='reference':
         with httpx.Client(transport=ncbi_transport()) as client:artifact=fetch_reference_check(record(),client)
         writer=storage.save_reference_check;loader=storage.load_reference_check
-        changed=artifact.model_copy(update={'checked_at':'changed'})
+        changed=artifact.model_copy(update={'checked_at':'2000-01-01T00:00:00Z'})
     else:
         captured=json.loads((FIXTURE.parent/'ncbi-repeat-deletion-observation.json').read_text(encoding='utf-8'))
         artifact=AlleleCheck.model_validate(captured['check']);writer=storage.save_allele_check
         parent=compare(InvestigationInput.model_validate(captured['input']))
         storage.save(path,parent.model_copy(update={'id':artifact.investigation_id}))
-        changed=artifact.model_copy(update={'checked_at':'changed'})
+        changed=artifact.model_copy(update={'checked_at':'2000-01-01T00:00:00Z'})
         loader=lambda path,_:storage.latest_allele_check(path,artifact.investigation_id)
     writer(path,artifact)
     with pytest.raises(storage.RecordConflictError):writer(path,changed)

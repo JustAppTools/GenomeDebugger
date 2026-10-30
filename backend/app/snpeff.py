@@ -5,6 +5,8 @@ This compares two outputs. It does not authenticate the user-supplied SnpEff run
 
 from datetime import datetime, timezone
 import hashlib
+import math
+import re
 from typing import Literal
 
 from pydantic import Field
@@ -12,6 +14,8 @@ from pydantic import Field
 from .engine import digest
 from .ensembl import SourceRecord
 from .models import StrictModel
+from .timestamps import timestamp_key
+from .admission import require_text
 
 
 class SnpEffCheckRequest(StrictModel):
@@ -29,6 +33,7 @@ class ConsequenceMatch(StrictModel):
 
 
 class SnpEffExecution(StrictModel):
+    capture_format: Literal['legacy_text', 'utf8_bytes'] = 'legacy_text'
     started_at: str
     elapsed_seconds: float
     command: list[str]
@@ -41,6 +46,7 @@ class SnpEffExecution(StrictModel):
     input_vcf_sha256: str
     output_vcf_sha256: str
     stderr: str
+    stderr_sha256: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
     software_version: str
     artifact_sources: dict[str,str] = Field(default_factory=dict)
     assembly_name: str | None = None
@@ -65,6 +71,30 @@ class SnpEffCheck(StrictModel):
     execution: SnpEffExecution | None = None
 
 
+def validate_execution_metadata(run: SnpEffExecution) -> None:
+    timestamp_key(run.started_at)
+    if not math.isfinite(run.elapsed_seconds) or run.elapsed_seconds < 0:
+        raise ValueError('SnpEff execution duration must be finite and nonnegative')
+    if not run.command or not run.command[0].strip() or any('\x00' in arg for arg in run.command):
+        raise ValueError('SnpEff execution command must include an executable and valid argument text')
+    for field in ('java_sha256', 'jar_sha256', 'config_sha256', 'database_sha256',
+                  'input_vcf_sha256', 'output_vcf_sha256'):
+        if not re.fullmatch(r'[0-9a-f]{64}', getattr(run, field)):
+            raise ValueError(f'SnpEff execution {field} must be a SHA-256 fingerprint')
+    if not run.database_files:
+        raise ValueError('SnpEff execution must preserve database file fingerprints')
+    for name, fingerprint in run.database_files.items():
+        require_text(name, 'SnpEff database filename')
+        if not re.fullmatch(r'[0-9a-f]{64}', fingerprint):
+            raise ValueError('SnpEff execution database files must have SHA-256 fingerprints')
+    require_text(run.software_version, 'SnpEff execution software version')
+
+
+def check_id(source_id: str, request: SnpEffCheckRequest, checked_at: str) -> str:
+    return digest({"source": source_id, "declaration": request.model_dump(mode="json"),
+                   "checked_at": checked_at})[:20]
+
+
 def compare_snpeff(record: SourceRecord, request: SnpEffCheckRequest) -> SnpEffCheck:
     data_lines = [line for line in request.vcf_text.splitlines() if line and not line.startswith("#")]
     if len(data_lines) != 1:
@@ -76,7 +106,14 @@ def compare_snpeff(record: SourceRecord, request: SnpEffCheckRequest) -> SnpEffC
     q = record.query
     if chrom.removeprefix("chr") != q.chromosome or position != str(q.position) or ref != q.ref or alt != q.alt:
         raise ValueError("SnpEff VCF allele does not exactly match the preserved Ensembl query")
-    tags = dict(part.split("=",1) for part in info.split(";") if "=" in part)
+    tags = {}
+    for part in info.split(";"):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        if key in tags:
+            raise ValueError(f"SnpEff VCF contains duplicate INFO tag {key}; resolve ambiguous annotations before comparison")
+        tags[key] = value
     if "ANN" not in tags:
         raise ValueError("SnpEff VCF has no ANN field")
     snpeff: dict[str,set[str]] = {}
@@ -104,7 +141,7 @@ def compare_snpeff(record: SourceRecord, request: SnpEffCheckRequest) -> SnpEffC
                    "No exact transcript IDs matched; transcript releases may differ." if status == "unresolved" else
                    "All transcript IDs and consequence terms agree between the two supplied outputs.")
     checked_at = datetime.now(timezone.utc).isoformat()
-    return SnpEffCheck(id=digest({"source":record.id,"vcf":request.vcf_text,"checked_at":checked_at})[:20],
+    return SnpEffCheck(id=check_id(record.id, request, checked_at),
                        source_record_id=record.id, source_response_sha256=record.source_response_sha256,
                        checked_at=checked_at, snpeff_version=request.snpeff_version,
                        genome_database=request.genome_database, database_sha256=request.database_sha256,

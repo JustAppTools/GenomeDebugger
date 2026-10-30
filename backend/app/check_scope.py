@@ -3,6 +3,30 @@
 from .ensembl import SourceRecord
 from .models import InvestigationInput
 from .ncbi import _manifest
+from .engine import canonical_consequence
+
+
+def validate_reference_provenance(payload: InvestigationInput) -> None:
+    summary = payload.reference_check
+    expected = {"reference_check_id": summary.id, "reference_check_status": summary.status} if summary else {}
+    for snapshot in payload.snapshots:
+        for key in ("reference_check_id", "reference_check_status"):
+            value = snapshot.provenance.configuration.get(key)
+            if value is not None and value != expected.get(key):
+                raise ValueError("NCBI reference check provenance contradicts the linked investigation summary; "
+                                 "update or remove reference_check_id and reference_check_status with the summary")
+
+
+def validate_annotation_provenance(payload: InvestigationInput) -> None:
+    summary = payload.annotation_check
+    expected = {"annotation_check_id": summary.id, "annotation_check_status": summary.status} if summary else {}
+    for snapshot in payload.snapshots:
+        configuration = snapshot.provenance.configuration
+        for key in ("annotation_check_id", "annotation_check_status"):
+            if key in configuration and configuration[key] != expected.get(key):
+                raise ValueError("SnpEff annotation check provenance contradicts the linked investigation summary")
+        if summary is None and "annotation_check_origin" in configuration:
+            raise ValueError("SnpEff execution origin requires a linked annotation check")
 
 
 def validate_annotation_origin(payload: InvestigationInput, check) -> None:
@@ -11,6 +35,18 @@ def validate_annotation_origin(payload: InvestigationInput, check) -> None:
         origin = snapshot.provenance.configuration.get("annotation_check_origin")
         if origin is not None and origin != expected:
             raise ValueError("SnpEff execution origin contradicts the preserved check record")
+
+
+def validate_check_annotations(payload: InvestigationInput, source: SourceRecord) -> None:
+    rows = {row.transcript_id: row for row in source.transcripts}
+    for snapshot in payload.snapshots:
+        for annotation in (snapshot.annotation, *snapshot.annotations):
+            original = rows.get(annotation.transcript_id)
+            if (original is None or annotation.gene_id != original.gene_id or
+                    canonical_consequence(annotation.consequence) !=
+                    canonical_consequence(';'.join(original.consequence_terms))):
+                raise ValueError(f'SnpEff annotation check does not apply to the edited annotations in snapshot {snapshot.id}; '
+                                 'remove the annotation check or compare the changed output separately')
 
 
 def validate_check_variants(payload: InvestigationInput, source: SourceRecord, label: str) -> None:

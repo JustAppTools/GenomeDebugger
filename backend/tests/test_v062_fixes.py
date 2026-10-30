@@ -66,6 +66,9 @@ def test_checks_cannot_validate_a_transformed_variant(tmp_path, monkeypatch, kin
     # The check is specific to the input allele. Explicit transformed outputs
     # can still cite the source after removing that inapplicable check.
     raw[kind+'_check'] = None
+    for snapshot in raw['snapshots']:
+        for suffix in ('id', 'status', 'origin'):
+            snapshot['provenance']['configuration'].pop(f'{kind}_check_{suffix}', None)
     assert api.post('/api/investigations', json=raw).status_code == 200
 
 
