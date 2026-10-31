@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced,openWorkspaceSources} from './workspace-helpers'
 import {openSourceTools} from './workspace-helpers'
 import {test,expect,type Page} from '@playwright/test'
 import {execFileSync} from 'node:child_process'
@@ -12,11 +13,11 @@ async function openUnsavedBaseline(page:Page) {
   expect(response.ok()).toBe(true)
   const result=await response.json()
   await page.goto('/')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await page.getByLabel('Search investigations').fill(result.id)
   await page.locator('.library-row').filter({hasText:result.id}).getByRole('button',{name:'Open',exact:true}).click()
   await page.getByRole('heading',{name:'Compared analyses',exact:true}).waitFor()
-  await page.getByRole('button',{name:'Saved tests',exact:true}).first().click()
+  await openWorkspaceAdvanced(page,'Saved tests')
   await expect(page.getByRole('button',{name:'Save regression case',exact:true})).toBeEnabled()
   return result
 }
@@ -34,7 +35,7 @@ for(const mode of ['Load cached','Fetch current from Ensembl']) {
     const checked=await response.json()
     await page.route('**/api/sources/ensembl/lookup',route=>route.fulfill({json:{record:source,access:mode==='Load cached'?'cache':'fetched'}}))
     await page.goto('/')
-    await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+    await openWorkspaceSources(page)
     await page.getByRole('button',{name:'Load cached',exact:true}).click()
     const chosen=source.transcripts.at(-1).transcript_id
     await page.getByLabel('Analysis A transcript',{exact:true}).selectOption(chosen)

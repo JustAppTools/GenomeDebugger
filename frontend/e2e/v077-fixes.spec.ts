@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced,openWorkspaceInputs,openWorkspaceSources} from './workspace-helpers'
 import {openSourceTools,prepareGuided} from './workspace-helpers'
 import {test,expect,type Page} from '@playwright/test'
 import {execFileSync} from 'node:child_process'
@@ -10,7 +11,7 @@ async function sourcePage(page:Page) {
   const source=bundle.entries.source_record
   await page.route('**/api/sources/ensembl/lookup',route=>route.fulfill({json:{record:source,access:'cache'}}))
   await page.goto('/')
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   await page.getByRole('button',{name:'Load cached',exact:true}).click()
   await openSourceTools(page,'snpeff')
   await page.getByLabel('SnpEff annotated VCF').waitFor()
@@ -132,15 +133,17 @@ test('a delayed initial list preserves a newly saved comparison in Recent',async
   })
   await page.goto('/')
   await expect.poll(()=>releases.length).toBeGreaterThan(0)
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await openWorkspaceInputs(page)
   await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   await page.getByLabel('Investigation JSON').fill(JSON.stringify(input))
   await page.getByRole('button',{name:'Compare',exact:true}).click()
-  await expect(page.locator('.recent-section')).toContainText(input.title)
+  await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
+  await page.getByRole('button',{name:'GenomeDebugger home'}).click()
+  await expect(page.getByRole('region',{name:'Recent comparisons'})).toContainText(input.title)
   releases.forEach(release=>release())
   await expect.poll(()=>completed).toBe(releases.length)
-  await expect(page.locator('.recent-section')).toContainText(input.title)
+  await expect(page.getByRole('region',{name:'Recent comparisons'})).toContainText(input.title)
 })
 
 test('older failed health requests cannot override a newer successful poll',async({page})=>{
@@ -170,7 +173,7 @@ test('library forward and backward paging stays stable during another client sav
   const prefix=`Stable library regression ${Date.now()} `
   for(let i=0;i<51;i++)expect((await page.request.post('/api/investigations',{data:{...input,title:prefix+i}})).ok()).toBe(true)
   await page.goto('/')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await page.getByLabel('Search investigations').fill(prefix)
   await expect(page.locator('.library-row')).toHaveCount(50)
   await expect(page.locator('.library-row').first()).toContainText(prefix+'50')
@@ -193,11 +196,11 @@ test('baselines saved from two tabs both remain accessible with their own histor
   const second=await context.newPage()
   for(const view of [page,second]){
     await view.goto('/')
-    await view.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+    await view.getByRole('link',{name:'Saved work',exact:true}).click()
     await view.getByLabel('Search investigations').fill(result.id)
     await view.locator('.library-row').filter({hasText:result.id}).getByRole('button',{name:'Open',exact:true}).click()
     await view.getByRole('heading',{name:'Compared analyses',exact:true}).waitFor()
-    await view.getByRole('button',{name:'Saved tests',exact:true}).first().click()
+    await openWorkspaceAdvanced(view,'Saved tests')
     await expect(view.getByRole('button',{name:'Save regression case',exact:true})).toBeEnabled()
   }
   await page.getByLabel('Test name').fill('First baseline with history')

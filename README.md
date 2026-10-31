@@ -8,7 +8,7 @@ The full React/Python comparison workbench is live on **Render Free**, with a se
 
 ## Local application
 
-GenomeDebugger compares two already analyzed genomic outputs and explains their differences, supporting evidence, and uncertainty. Application **0.9.0** adds an explicit, isolated public-preview mode while preserving local storage and the 0.8.3 repairs; see [fixes, verification, and release limits](docs/fixes-0.8.3-2026-10-29.md). Comparator **0.6.7** compares complete imported row collections and unordered compound consequence terms, while archived rules preserve historical replay. The tool does **not** diagnose conditions or decide whether a DNA change is harmful.
+GenomeDebugger compares two already analyzed genomic outputs and explains their differences, supporting evidence, and uncertainty. Application **0.10.0** introduces a guided workspace with horizontal navigation, three input paths, readable explanations, and a distinct warm neutral/plum visual design. Public hosting retains separate temporary browser workspaces. See [the workspace redesign](docs/guided-workspace-0.10.0-2026-10-31.md) and [previous fixes and release limits](docs/fixes-0.8.3-2026-10-29.md). Comparator **0.6.7** compares complete imported row collections and unordered compound consequence terms, while archived rules preserve historical replay. The tool does **not** diagnose conditions or decide whether a DNA change is harmful.
 
 See the [0.8.0 implementation coverage and remaining dependencies](docs/product-changes-0.8.0-2026-10-26.md), [input/data guide](docs/local-data-and-imports.md), and [desktop package guide](docs/desktop-guide.md).
 
@@ -20,7 +20,7 @@ See the [0.8.0 implementation coverage and remaining dependencies](docs/product-
 - Read the specific result, separate check scopes, and engine findings. Supporting details show readable values and literal DNA edits first; exact JSON remains optional.
 - Explicitly save/resume/discard a browser-local draft. Organize completed comparisons using labels, notes, tags, favorites, archive/restore, filters, and sorting. Organization does not change scientific records or their hashes.
 - Preview/download a readable HTML report for reading or printing, export Markdown/JSON, or use **Full bundle** for replay-checked transfer. A copied localhost link only works on the installation holding the record.
-- Use **Help** for input origins, supported scopes, terms, and troubleshooting. Use **Local data** for storage, versions, backups, and restoration guidance. Scientific saved tests remain available under advanced navigation.
+- Use **Guide** for input origins, supported scopes, terms, and troubleshooting. Footer **Local data and settings** (or **Workspace data and settings** on the public preview) provides storage, backups, and restoration guidance. Open **Advanced tools** within a comparison for scientific saved tests or its original input JSON. The footer shows the application version; expand it for the comparison-engine version.
 
 
 ## Start on Windows
@@ -54,7 +54,7 @@ cd D:\Creation\GenomeDebugger\frontend
 npm run dev -- --host 127.0.0.1
 ```
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Select **Try an example** to run the comparison and see its findings. Open **Input JSON** to inspect or edit the input, then use **Compare** to run an edited version. The API documentation is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Select **Try an example** to run the comparison and see its findings. Open **Advanced tools → Input JSON** to inspect or edit the input, then use **Compare** to run an edited version. The API documentation is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
 ## What works
 

@@ -1,3 +1,4 @@
+import {openWorkspaceInputs} from './workspace-helpers'
 import {prepareGuided} from './workspace-helpers'
 import {test,expect,type Page} from '@playwright/test'
 import {execFileSync} from 'node:child_process'
@@ -5,7 +6,7 @@ import path from 'node:path'
 
 async function openSaved(page:Page,result:any) {
   await page.goto('/')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await page.getByLabel('Search investigations').fill(result.id)
   await page.locator('.library-row').filter({hasText:result.id}).getByRole('button',{name:'Open',exact:true}).click()
   await page.getByRole('heading',{name:'Compared analyses',exact:true}).waitFor()
@@ -66,7 +67,7 @@ for(const invalid of ['boolean coordinate','blank required title']) {
     else input.title=' \t\u00a0'
     const text=JSON.stringify(input,null,2)
     await page.goto('/')
-    await page.getByRole('button',{name:'Enter results',exact:true}).click()
+    await openWorkspaceInputs(page)
     await prepareGuided(page)
     await page.getByRole('button',{name:'JSON editor',exact:true}).click()
     await page.getByLabel('Investigation JSON').fill(text)
@@ -96,7 +97,7 @@ test('JSON edits cannot present an old source agreement as a check of changed co
   const original=await result.json(),input=structuredClone(original.input)
   for(const snapshot of input.snapshots){snapshot.provenance.tool='Custom transformed output';snapshot.annotation.consequence='stop_gained'}
   await openSaved(page,original)
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await openWorkspaceInputs(page)
   await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   await page.getByLabel('Investigation JSON').fill(JSON.stringify(input))

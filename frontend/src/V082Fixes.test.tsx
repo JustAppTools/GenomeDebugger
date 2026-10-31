@@ -54,13 +54,13 @@ test('undoing to the compared input clears its stale-result warning',async()=>{
   vi.stubGlobal('fetch',vi.fn(async(url:string,options?:RequestInit)=>ok(url.endsWith('/health')?{version:'0.6.5'}:url.includes('/demos/')?result.input:options?.method==='POST'?result:url.endsWith('/investigations')?[]:{})))
   render(<App/>);fireEvent.click(screen.getByRole('button',{name:'Try an example'}))
   await screen.findByRole('heading',{name:'What this comparison tells you'})
-  fireEvent.click(screen.getByRole('button',{name:'Input JSON'}))
+  fireEvent.click(screen.getByText('Advanced tools'));fireEvent.click(screen.getByRole('button',{name:'Input JSON'}))
   const editor=screen.getByLabelText('Investigation JSON')
   const original=(editor as HTMLTextAreaElement).value
   fireEvent.change(editor,{target:{value:original+' '}})
   fireEvent.click(screen.getByRole('button',{name:'Undo edit'}))
   expect(editor).toHaveValue(original)
-  fireEvent.click(screen.getByRole('button',{name:'Results'}))
+  fireEvent.click(screen.getByRole('link',{name:'Compare'}))
   expect(screen.queryByText(/Your input has changed\. The displayed comparison/)).not.toBeInTheDocument()
 })
 

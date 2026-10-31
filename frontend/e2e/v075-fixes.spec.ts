@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced,openWorkspaceSources} from './workspace-helpers'
 import {openSourceTools,prepareExample} from './workspace-helpers'
 import {test,expect,type Page} from '@playwright/test'
 import {execFileSync} from 'node:child_process'
@@ -31,10 +32,10 @@ for(const action of ['comparison','demo','open','bundle'] as const) {
       await new Promise<void>(resolve=>{release=resolve})
       await route.fulfill({response})
     })
-    if(action==='comparison')await page.getByRole('button',{name:'Run comparison',exact:true}).click()
+    if(action==='comparison')await openWorkspaceAdvanced(page,'Run comparison')
     else if(action==='demo'){await prepareExample(page);await page.getByRole('button',{name:/^Try (?:an )?example(?: again)?$/}).first().click()}
     else {
-      await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+      await page.getByRole('link',{name:'Saved work',exact:true}).click()
       if(action==='open') {
         await page.getByLabel('Search investigations').fill(bundle.entries.investigation.id)
         await page.locator('.library-row').filter({hasText:bundle.entries.investigation.id}).getByRole('button',{name:'Open',exact:true}).click()
@@ -42,7 +43,7 @@ for(const action of ['comparison','demo','open','bundle'] as const) {
       else await page.getByLabel('Import replay-checked bundle').setInputFiles({name:'saved.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bundle))})
     }
     await expect.poll(()=>waiting).toBe(true)
-    await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+    await openWorkspaceSources(page)
     await page.getByRole('button',{name:'Load cached',exact:true}).click()
     await openSourceTools(page,'snpeff')
     await page.getByLabel('SnpEff annotated VCF').fill('Keep this newer VCF draft')
@@ -62,7 +63,7 @@ test('a discarded SnpEff request cannot select a check belonging to the previous
   expect((await page.request.post(`/api/sources/ensembl/records/${source.id}/snpeff-check`,{data:{
     vcf_text:`1\t6524705\t.\tC\tT\t.\t.\tANN=${ann}`,snpeff_version:'test',genome_database:'test',database_sha256:'a'.repeat(64)}})).ok()).toBe(true)
   await page.goto('/')
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   await page.getByRole('button',{name:'Load cached',exact:true}).click()
   const url=`/api/sources/ensembl/records/${source.id}/snpeff-check`
   let release:()=>void=()=>{},waiting=false
@@ -112,7 +113,7 @@ test('source refresh preserves selections made before and during the request',as
   const bundle=await seed(page)
   const source=bundle.entries.source_record
   await page.goto('/')
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   await openSourceTools(page,'history')
   await page.getByRole('button',{name:'Load preserved sources',exact:true}).click()
   await openSourceTools(page,'history')

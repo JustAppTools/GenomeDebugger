@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced,openWorkspaceInputs,openWorkspaceSources} from './workspace-helpers'
 import {openSourceTools,prepareGuided} from './workspace-helpers'
 import {expect,test,type Page} from '@playwright/test'
 import {readFile} from 'node:fs/promises'
@@ -22,7 +23,7 @@ test('public transcript changes preserve the new selection when an old compariso
     await route.fulfill({response})
   })
   await page.goto('/')
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   await page.getByRole('button',{name:'Load cached',exact:true}).click()
   const oldA=await page.getByLabel('Analysis A transcript',{exact:true}).inputValue()
   const oldB=await page.getByLabel('Analysis B transcript',{exact:true}).inputValue()
@@ -37,7 +38,7 @@ test('public transcript changes preserve the new selection when an old compariso
   await page.unroute(url)
   await page.getByRole('button',{name:'Compare',exact:true}).click()
   await page.getByRole('heading',{name:'Compared analyses',exact:true}).waitFor()
-  await page.getByRole('button',{name:'Input JSON',exact:true}).click()
+  await openWorkspaceAdvanced(page,'Input JSON')
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   expect(JSON.parse(await page.getByLabel('Investigation JSON').inputValue()).snapshots[0].annotation.transcript_id).toBe(newA)
 })
@@ -51,7 +52,7 @@ test('preserved transcript changes preserve the new selection when an old compar
     await route.fulfill({response})
   })
   await page.goto('/')
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   await openSourceTools(page,'history')
   await page.getByRole('button',{name:'Load preserved sources',exact:true}).click()
   await openSourceTools(page,'history')
@@ -72,7 +73,7 @@ test('preserved transcript changes preserve the new selection when an old compar
   await page.unroute('**/api/sources/compare')
   await page.getByRole('button',{name:'Compare preserved sources',exact:true}).click()
   await page.getByRole('heading',{name:'Compared analyses',exact:true}).waitFor()
-  await page.getByRole('button',{name:'Input JSON',exact:true}).click()
+  await openWorkspaceAdvanced(page,'Input JSON')
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   expect(JSON.parse(await page.getByLabel('Investigation JSON').inputValue()).snapshots[0].annotation.transcript_id).toBe(newA)
 })
@@ -82,7 +83,7 @@ test('guided mode accepts a Unicode title within the API character limit',async(
   input.title='🧬'.repeat(150)
   expect((await page.request.post('/api/investigations',{data:input})).ok()).toBe(true)
   await page.goto('/')
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await openWorkspaceInputs(page)
   await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   await page.getByLabel('Investigation JSON').fill(JSON.stringify(input))

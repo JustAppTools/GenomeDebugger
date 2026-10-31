@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced} from './workspace-helpers'
 // Browser regressions for the 0.8.1 audit, fixed in 0.8.2.
 import {expect,test} from '@playwright/test'
 import {readFile} from 'node:fs/promises'
@@ -36,8 +37,8 @@ test('editing different records and leaving the section preserves unsaved detail
   await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('')
   await rowA.getByRole('button',{name:'Edit details'}).click()
   await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Unsaved review')
-  await page.getByRole('button',{name:'Help',exact:true}).click()
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Guide',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('Unsaved review')
   await page.getByRole('button',{name:'Cancel editing'}).click()
 })
@@ -45,11 +46,11 @@ test('editing different records and leaving the section preserves unsaved detail
 test('undo to the compared input removes the stale-result warning',async({page})=>{
   const saved=await create(page,'Audit undo '+Date.now())
   await page.goto(`/#/comparison/${saved.id}/overview`)
-  await page.getByRole('button',{name:'Input JSON',exact:true}).click()
+  await openWorkspaceAdvanced(page,'Input JSON')
   const input=page.getByLabel('Investigation JSON'),original=await input.inputValue()
   await input.fill(original+' ');await page.getByRole('button',{name:'Undo edit'}).click()
   await expect(input).toHaveValue(original)
-  await page.getByRole('button',{name:'Results',exact:true}).click()
+  await page.getByRole('link',{name:'Compare',exact:true}).click()
   await expect(page.getByText(/Your input has changed\. The displayed comparison/)).toHaveCount(0)
 })
 

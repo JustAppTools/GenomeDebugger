@@ -21,7 +21,7 @@ test('loads a demo, compares snapshots, and opens replay evidence', async () => 
   await screen.findByText('Show technical details')
   fireEvent.click(screen.getByText('Show technical details'))
   expect(screen.getByText('Controlled replay matches.')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button',{name:'Input JSON'}))
+  fireEvent.click(screen.getByText('Advanced tools'));fireEvent.click(screen.getByRole('button',{name:'Input JSON'}))
   expect(screen.getByLabelText('Investigation JSON')).toHaveValue(JSON.stringify(demo,null,2))
   fireEvent.change(screen.getByLabelText('Investigation JSON'), {target:{value:'{'}})
   expect(screen.getByRole('status')).toHaveTextContent('Your input has changed')

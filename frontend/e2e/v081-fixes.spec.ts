@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced} from './workspace-helpers'
 import {expect,test} from '@playwright/test'
 import {createHash} from 'node:crypto'
 import {readFile} from 'node:fs/promises'
@@ -40,11 +41,11 @@ test('home draft recovery follows save, resume and discard without a reload',asy
   await page.getByRole('button',{name:'Enter my results',exact:true}).click()
   await page.getByLabel('Investigation title').fill('Draft recovery browser regression')
   await page.getByRole('button',{name:'Save draft locally'}).click()
-  await page.getByRole('button',{name:'Results',exact:true}).click()
+  await page.getByRole('link',{name:'Compare',exact:true}).click()
   await page.getByRole('button',{name:'Resume saved draft',exact:true}).click()
   await expect(page.getByLabel('Investigation title')).toHaveValue('Draft recovery browser regression')
   await page.getByRole('button',{name:'Discard saved draft'}).click()
-  await page.getByRole('button',{name:'Results',exact:true}).click()
+  await page.getByRole('link',{name:'Compare',exact:true}).click()
   await expect(page.getByRole('heading',{name:'Choose a starting point'})).toBeVisible()
   await expect(page.getByRole('button',{name:'Resume saved draft'})).toHaveCount(0)
 })
@@ -103,13 +104,21 @@ test('re-comparison preserves Recent names and refreshes an archive change',asyn
   const url=`/api/workspace/library/${saved.id}/label`
   expect((await page.request.post(url,{data:{display_name:'A recognizable browser comparison'}})).ok()).toBe(true)
   await page.goto(`/#/comparison/${saved.id}/overview`)
-  const recent=page.getByRole('complementary').getByRole('button',{name:/A recognizable browser comparison/})
+  await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
+  await page.getByRole('button',{name:'GenomeDebugger home'}).click()
+  const recent=page.getByRole('region',{name:'Recent comparisons'}).getByRole('button',{name:/A recognizable browser comparison/})
   await expect(recent).toBeVisible()
+  await recent.click()
   const metadata=page.waitForResponse(r=>r.url().endsWith(url)&&r.request().method()==='GET')
-  await page.getByRole('button',{name:'Run comparison',exact:true}).click()
-  await metadata;await expect(recent).toBeVisible()
+  await openWorkspaceAdvanced(page,'Run comparison')
+  await metadata
+  await page.getByRole('button',{name:'GenomeDebugger home'}).click()
+  await expect(recent).toBeVisible()
   expect((await page.request.post(url,{data:{archived:true}})).ok()).toBe(true)
-  await page.getByRole('button',{name:'Run comparison',exact:true}).click()
+  await recent.click()
+  await openWorkspaceAdvanced(page,'Run comparison')
+  await expect(page.getByRole('heading',{name:'Compared analyses'})).toBeVisible()
+  await page.getByRole('button',{name:'GenomeDebugger home'}).click()
   await expect(recent).toHaveCount(0)
 })
 

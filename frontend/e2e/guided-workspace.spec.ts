@@ -1,0 +1,52 @@
+import {expect,test} from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
+import {openWorkspaceAdvanced,openWorkspaceInputs} from './workspace-helpers'
+
+test('horizontal navigation preserves an unfinished input across guide and saved work',async({page})=>{
+  await page.goto('/')
+  const navigation=page.getByRole('navigation',{name:'Main navigation'})
+  await expect(navigation.getByRole('link')).toHaveText(['Compare','Saved work','Guide'])
+  await expect(page.locator('.sidebar')).toHaveCount(0)
+  await page.getByRole('button',{name:'Enter my results'}).click()
+  await page.getByLabel('Investigation title').fill('Keep my current comparison draft')
+  await page.getByRole('link',{name:'Guide',exact:true}).click()
+  await expect(page.locator('main h1')).toBeFocused()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
+  await openWorkspaceInputs(page)
+  await expect(page.getByLabel('Investigation title')).toHaveValue('Keep my current comparison draft')
+  await expect(page.getByRole('button',{name:'Review inputs',exact:true})).toHaveAttribute('aria-current','step')
+})
+
+test('the explanation, evidence, advanced inputs and application version stay reachable',async({page})=>{
+  await page.goto('/')
+  await page.getByRole('button',{name:'Try an example',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'What this comparison tells you'})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Understand',exact:true})).toHaveAttribute('aria-current','step')
+  await expect(page.getByLabel('Investigation JSON')).toHaveCount(0)
+  await page.getByRole('button',{name:'Supporting details',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Evidence inspector'})).toBeVisible()
+  const deepLink=page.url()
+  await page.reload()
+  await expect(page.getByRole('heading',{name:'Evidence inspector'})).toBeVisible()
+  await expect(page).toHaveURL(deepLink)
+  await openWorkspaceAdvanced(page,'Input JSON')
+  await expect(page.getByLabel('Investigation JSON')).toHaveValue(/Synthetic transcript/)
+  await page.getByText('GenomeDebugger v0.10.0',{exact:true}).click()
+  await expect(page.getByText('Comparison engine v0.6.7',{exact:true})).toBeVisible()
+})
+
+for(const width of [320,1280])test(`starting paths and utilities fit at ${width}px and pass core accessibility checks`,async({page})=>{
+  await page.setViewportSize({width,height:900})
+  await page.goto('/')
+  await expect(page.getByText('Local engine connected',{exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Enter my results'})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Explore public data'})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Try an example',exact:true})).toBeVisible()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  const result=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()
+  expect(result.violations.map(v=>({id:v.id,targets:v.nodes.map(n=>n.target)}))).toEqual([])
+  await page.getByRole('button',{name:'Local data and settings',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Local data and settings'})).toBeVisible()
+  await page.getByRole('button',{name:'GenomeDebugger home'}).click()
+  await expect(page.getByRole('heading',{name:'Why did these results differ?'})).toBeVisible()
+})

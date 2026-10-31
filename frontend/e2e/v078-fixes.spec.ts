@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced,openWorkspaceSources} from './workspace-helpers'
 import {openSourceTools,prepareExample} from './workspace-helpers'
 import {test,expect,type Page} from '@playwright/test'
 import {execFileSync} from 'node:child_process'
@@ -11,7 +12,7 @@ async function sourcePage(page:Page) {
   const source=bundle.entries.source_record
   await page.route('**/api/sources/ensembl/lookup',route=>route.fulfill({json:{record:source,access:'cache'}}))
   await page.goto('/')
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   await page.getByRole('button',{name:'Load cached',exact:true}).click()
   await openSourceTools(page,'snpeff')
   await page.getByLabel('SnpEff annotated VCF').waitFor()
@@ -19,7 +20,7 @@ async function sourcePage(page:Page) {
 }
 async function openSaved(page:Page,id:string) {
   await page.goto('/')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await page.getByLabel('Search investigations').fill(id)
   await page.locator('.library-row').filter({hasText:id}).getByRole('button',{name:'Open',exact:true}).click()
   await page.getByRole('heading',{name:'Compared analyses',exact:true}).waitFor()
@@ -104,7 +105,7 @@ for(const kind of ['report.md','bundle']) {
     if(kind!=='bundle')await page.getByText('Other export formats',{exact:true}).click()
     await page.getByRole('button',{name:kind==='bundle'?'Full bundle':'Text report',exact:true}).click()
     await expect.poll(()=>waiting).toBe(true)
-    await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+    await openWorkspaceSources(page)
     release()
     await expect.poll(()=>completed).toBe(true)
     await expect(page.getByRole('alert')).toHaveCount(0)
@@ -136,7 +137,7 @@ print(json.dumps({'format':'GenomeDebugger bundle','version':2,'engine_version':
   })
   await page.getByRole('button',{name:'Full bundle',exact:true}).click()
   await expect.poll(()=>waiting).toBe(true)
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   const download=page.waitForEvent('download')
   release()
   expect((await download).suggestedFilename()).toContain('-bundle.json')
@@ -165,7 +166,7 @@ test('bundle download and import preserve finite numeric metadata exactly',async
   expect(verified.status(),await verified.text()).toBe(200)
   expect(content).toContain('"whole":1.0')
   expect(content).toContain('"large":9007199254740993')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   const completed=page.waitForResponse(r=>r.url().endsWith('/api/bundles/import')&&r.request().method()==='POST')
   await page.getByLabel('Import replay-checked bundle').setInputFiles({name:'numeric-bundle.json',mimeType:'application/json',buffer:Buffer.from(content)})
   expect((await completed).status()).toBe(200)
@@ -194,7 +195,7 @@ test('guided custom candidates submit valid provenance and retain their baseline
   const created=await page.request.post(`/api/investigations/${result.id}/regression-cases`,{data:{name:'Custom candidate browser regression'}})
   const saved=await created.json()
   expect(created.ok()).toBe(true)
-  await page.getByRole('button',{name:'Saved tests',exact:true}).first().click()
+  await openWorkspaceAdvanced(page,'Saved tests')
   await expect(page.getByLabel('Candidate analysis 1 consequence',{exact:true})).toBeDisabled()
   await page.getByRole('button',{name:'Use custom output for analysis A',exact:true}).click()
   await page.getByLabel('Candidate analysis 1 consequence',{exact:true}).fill('missense_variant')
@@ -226,7 +227,7 @@ test('manual Unicode test names use the same 200-character limit as the API',asy
   input.title=`Unicode name regression ${Date.now()}`
   const result=await(await page.request.post('/api/investigations',{data:input})).json()
   await openSaved(page,result.id)
-  await page.getByRole('button',{name:'Saved tests',exact:true}).first().click()
+  await openWorkspaceAdvanced(page,'Saved tests')
   await expect(page.getByRole('button',{name:'Save regression case',exact:true})).toBeEnabled()
   const name='🧬'.repeat(110)
   await page.getByLabel('Test name',{exact:true}).fill('')
@@ -246,7 +247,7 @@ test('library search supports Unicode case pairs and long supplementary text',as
     expect((await page.request.post('/api/investigations',{data:{...input,title}})).ok()).toBe(true)
   }
   await page.goto('/')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await page.getByLabel('Search investigations').fill(prefix+'café')
   await expect(page.locator('.library-row')).toHaveCount(2)
   await page.getByLabel('Search investigations').fill('')
@@ -266,7 +267,7 @@ test('library snapshot excludes inserts after another client deletes the newest 
     expect(response.ok()).toBe(true);latest=(await response.json()).id
   }
   await page.goto('/')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await page.getByLabel('Search investigations').fill(prefix)
   await expect(page.locator('.library-row')).toHaveCount(50)
   expect((await page.request.delete('/api/investigations/'+latest)).ok()).toBe(true)

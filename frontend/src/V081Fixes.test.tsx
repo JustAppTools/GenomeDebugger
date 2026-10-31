@@ -1,5 +1,5 @@
 // Regressions for the 0.8.0 audit, fixed in 0.8.1.
-import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react'
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
 import {afterEach,expect,test,vi} from 'vitest'
 import App from './App'
 import WorkspaceLibrary from './WorkspaceLibrary'
@@ -60,7 +60,7 @@ test('saving a draft updates the home Resume offer',async()=>{
   fireEvent.change(screen.getByLabelText('Investigation title'),{target:{value:'Explicitly saved draft'}})
   fireEvent.click(screen.getByRole('button',{name:'Save draft locally'}))
   expect(localStorage.getItem('genomedebugger-explicit-draft-v1')).toContain('Explicitly saved draft')
-  fireEvent.click(screen.getByRole('button',{name:'Results'}))
+  fireEvent.click(screen.getByRole('link',{name:'Compare'}))
   expect(screen.getByRole('button',{name:'Resume saved draft'})).toBeInTheDocument()
 })
 
@@ -70,7 +70,7 @@ test('discarding a draft removes the home Resume offer',async()=>{
   fireEvent.click(screen.getByRole('button',{name:'Enter my results'}))
   fireEvent.click(screen.getByRole('button',{name:'Discard saved draft'}))
   expect(localStorage.getItem('genomedebugger-explicit-draft-v1')).toBeNull()
-  fireEvent.click(screen.getByRole('button',{name:'Results'}))
+  fireEvent.click(screen.getByRole('link',{name:'Compare'}))
   expect(screen.queryByRole('button',{name:'Resume saved draft'})).not.toBeInTheDocument()
 })
 
@@ -136,13 +136,14 @@ test.each(['matching','uncertain'] as const)('%s example explains that no contro
 test('re-comparing a renamed saved record preserves its name in Recent',async()=>{
   const saved={...result,input:{...result.input,title:'Original scientific title'}}
   vi.stubGlobal('fetch',vi.fn(async(url:string,options?:RequestInit)=>ok(url.endsWith('/health')?{version:'0.6.5'}:url.endsWith('/investigations')&&!options?.method?[{id:saved.id,title:saved.input.title,display_name:'My recognizable name'}]:saved)))
-  render(<App/>);const sidebar=screen.getByRole('complementary')
-  fireEvent.click(await within(sidebar).findByRole('button',{name:/My recognizable name/}))
+  render(<App/>)
+  fireEvent.click(await screen.findByRole('button',{name:/My recognizable name/}))
   await screen.findByRole('heading',{name:'Compared analyses'})
-  fireEvent.click(screen.getByRole('button',{name:'Run comparison'}))
+  fireEvent.click(screen.getByText('Advanced tools'));fireEvent.click(screen.getByRole('button',{name:'Run comparison'}))
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([,options])=>options?.method==='POST')).toBe(true))
   await act(async()=>{})
-  expect(within(sidebar).getByRole('button',{name:/My recognizable name/})).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'GenomeDebugger home'}))
+  expect(screen.getByRole('button',{name:/My recognizable name/})).toBeInTheDocument()
 })
 
 test('readable additional-variant identity record shows its status and explanation',()=>{

@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test'
 
 test('new visitors get explicit input origins and no invented DNA defaults',async({page})=>{
   await page.goto('/')
-  await expect(page.getByRole('heading',{name:'Import two analysis results'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'I have two analysis outputs'})).toBeVisible()
   await expect(page.getByRole('button',{name:'Explore public data'})).toBeVisible()
   await page.getByRole('button',{name:'Enter my results'}).click()
   await expect(page.getByLabel('Analysis 1 assembly',{exact:true})).toHaveValue('')
@@ -77,7 +77,7 @@ test('names and archive restoration leave scientific input unchanged',async({pag
   expect(unchanged.input_sha256).toBe(saved.input_sha256)
   expect(unchanged.input).toEqual(saved.input)
   await page.goBack()
-  await expect(page.getByRole('heading',{name:'Investigation library'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Your saved comparisons'})).toBeVisible()
 })
 
 test('tabular preview explicitly accepts every row before a comparison is saved',async({page})=>{

@@ -1,3 +1,4 @@
+import {openWorkspaceInputs,openWorkspaceSources} from './workspace-helpers'
 import {openSourceTools,prepareGuided} from './workspace-helpers'
 import {test,expect,type Page} from '@playwright/test'
 import {execFileSync} from 'node:child_process'
@@ -11,7 +12,7 @@ async function sourcePage(page:Page) {
   // Select this preserved fixture explicitly so the delayed URL matches its ID.
   await page.route('**/api/sources/ensembl/lookup',route=>route.fulfill({json:{record:bundle.entries.source_record,access:'cache'}}))
   await page.goto('/')
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   await page.getByRole('button',{name:'Load cached',exact:true}).click()
   await openSourceTools(page,'snpeff')
   await page.getByLabel('SnpEff annotated VCF').waitFor()
@@ -65,14 +66,14 @@ for(const preserved of [false,true]) {
 
 test('invalid UTF-8 JSON and bundles are rejected before changing the draft or posting',async({page})=>{
   await page.goto('/')
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await openWorkspaceInputs(page)
   await prepareGuided(page)
   await page.getByLabel('Investigation title').fill('Keep my input')
   const malformed=Buffer.concat([Buffer.from('{"title":"'),Buffer.from([0xe9]),Buffer.from('"}')])
   await page.getByLabel('Import input JSON',{exact:true}).setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:malformed})
   await expect(page.getByRole('alert')).toContainText('valid UTF-8')
   await expect(page.getByLabel('Investigation title')).toHaveValue('Keep my input')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   let posts=0
   page.on('request',request=>{if(request.url().includes('/api/bundles/')&&request.method()==='POST')posts++})
   await page.getByLabel('Import replay-checked bundle').setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:malformed})

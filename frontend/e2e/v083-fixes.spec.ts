@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced,openWorkspaceInputs,openWorkspaceSources} from './workspace-helpers'
 // Corrected 0.8.2 audit workflows, released in 0.8.3. Synthetic isolated data only.
 import {expect,test} from '@playwright/test'
 import {createHash} from 'node:crypto'
@@ -14,8 +15,8 @@ test('near-limit saved draft can resume after leaving the input screen',async({p
   await page.getByLabel('Investigation JSON').fill(text)
   await page.getByRole('button',{name:'Save draft locally'}).click()
   await expect(page.getByText('Draft saved in this browser. It is editable and separate from completed comparisons.')).toBeVisible()
-  await page.getByRole('button',{name:'Help',exact:true}).click()
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await page.getByRole('link',{name:'Guide',exact:true}).click()
+  await openWorkspaceInputs(page)
   await page.getByRole('button',{name:'Resume saved draft',exact:true}).click()
   await expect(page.getByLabel('Investigation JSON')).toHaveValue(text)
 })
@@ -34,15 +35,15 @@ test('guided entry requires context start when only reference letters are entere
 
 test('opening Help retains a public query and unsaved candidate outputs',async({page})=>{
   await page.goto('/#/source');await page.getByLabel('Position',{exact:true}).fill('12345')
-  await page.getByRole('button',{name:'Help',exact:true}).click()
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await page.getByRole('link',{name:'Guide',exact:true}).click()
+  await openWorkspaceSources(page)
   await expect(page.getByLabel('Position',{exact:true})).toHaveValue('12345')
   const saved=await create(page,'Candidate navigation audit '+Date.now())
   expect((await page.request.post(`/api/investigations/${saved.id}/regression-cases`,{data:{name:'Navigation baseline'}})).status()).toBe(200)
   await page.goto(`/#/comparison/${saved.id}/regression`)
   await page.getByLabel('Candidate analysis 1 consequence',{exact:true}).fill('stop_gained')
-  await page.getByRole('button',{name:'Help',exact:true}).click()
-  await page.getByRole('button',{name:'Saved tests',exact:true}).click()
+  await page.getByRole('link',{name:'Guide',exact:true}).click()
+  await openWorkspaceAdvanced(page,'Saved tests')
   await expect(page.getByLabel('Candidate analysis 1 consequence',{exact:true})).toHaveValue('stop_gained')
 })
 
@@ -50,8 +51,8 @@ test('Enter results retains unfinished JSON in its editor',async({page})=>{
   await page.goto('/#/input');await page.getByRole('button',{name:'JSON editor'}).click()
   const text='{"title":"Keep unfinished analysis", "snapshots":['
   await page.getByLabel('Investigation JSON').fill(text)
-  await page.getByRole('button',{name:'Help',exact:true}).click()
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await page.getByRole('link',{name:'Guide',exact:true}).click()
+  await openWorkspaceInputs(page)
   await expect(page.getByLabel('Investigation JSON')).toHaveValue(text)
   await expect(page.getByRole('alert')).toContainText('Repair the JSON')
 })
@@ -69,8 +70,8 @@ test('leaving a pending notes save keeps the restored editor revision current',a
   })
   await page.getByRole('button',{name:'Save library details'}).click()
   await expect.poll(()=>waiting).toBe(true)
-  await page.getByRole('button',{name:'Help',exact:true}).click()
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Guide',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await expect(page.getByRole('textbox',{name:'Notes',exact:true})).toHaveValue('First saved notes')
   const firstResponse=page.waitForResponse(r=>r.url().endsWith(url)&&r.request().method()==='POST')
   release();await(await firstResponse).finished()

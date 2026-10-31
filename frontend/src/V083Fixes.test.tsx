@@ -52,10 +52,10 @@ test('near-limit browser drafts remain readable after JSON escaping',()=>{
 
 test('opening Help retains an unsaved public-source query',async()=>{
   appFetch();render(<App/> )
-  fireEvent.click(screen.getByRole('button',{name:'Look up a DNA change'}))
+  fireEvent.click(screen.getByRole('button',{name:'Explore public data'}))
   fireEvent.change(screen.getByLabelText('Position',{exact:true}),{target:{value:'12345'}})
-  fireEvent.click(screen.getByRole('button',{name:'Help'}))
-  fireEvent.click(screen.getByRole('button',{name:'Look up a DNA change'}))
+  fireEvent.click(screen.getByRole('link',{name:'Guide'}))
+  fireEvent.click(screen.getByRole('button',{name:'Explore a public DNA change'}))
   expect(screen.getByLabelText('Position',{exact:true})).toHaveValue(12345)
 })
 
@@ -65,8 +65,8 @@ test('Enter results navigation preserves malformed JSON in its editor',async()=>
   fireEvent.click(screen.getByRole('button',{name:'JSON editor'}))
   const text='{"title":"Keep this unfinished analysis", "snapshots":['
   fireEvent.change(screen.getByLabelText('Investigation JSON'),{target:{value:text}})
-  fireEvent.click(screen.getByRole('button',{name:'Help'}))
-  fireEvent.click(screen.getByRole('button',{name:'Enter results'}))
+  fireEvent.click(screen.getByRole('link',{name:'Guide'}))
+  fireEvent.click(screen.getByRole('link',{name:'Compare'}));fireEvent.click(screen.getByRole('button',{name:'Review inputs'}))
   expect(screen.getByLabelText('Investigation JSON')).toHaveValue(text)
   expect(screen.getByRole('alert')).toHaveTextContent('Repair the JSON')
 })

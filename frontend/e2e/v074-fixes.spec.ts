@@ -1,3 +1,4 @@
+import {openWorkspaceInputs,openWorkspaceSources} from './workspace-helpers'
 import {openSourceTools,prepareGuided} from './workspace-helpers'
 import {test,expect,type Page} from '@playwright/test'
 import {execFileSync} from 'node:child_process'
@@ -11,7 +12,7 @@ async function sourcePage(page:Page) {
   const bundle=referenceBundle()
   expect((await page.request.post('/api/bundles/import',{data:bundle})).ok()).toBe(true)
   await page.goto('/')
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   return bundle.entries.source_record
 }
 
@@ -41,7 +42,7 @@ for(const preserved of [false,true]) {
     })
     await page.getByRole('button',{name:preserved?'Compare preserved sources':'Compare',exact:true}).click()
     await expect.poll(()=>waiting).toBe(true)
-    await page.getByRole('complementary').getByRole('button',{name:'Enter results',exact:true}).click()
+    await openWorkspaceInputs(page)
     await prepareGuided(page)
     await page.getByLabel('Investigation title',{exact:true}).fill('Keep my newer draft')
     const completed=page.waitForResponse(r=>r.url().endsWith(url))
@@ -72,9 +73,9 @@ test('reopening the source screen does not reactivate the previous screen callba
   })
   await page.getByRole('button',{name:'Compare',exact:true}).click()
   await expect.poll(()=>waiting).toBe(true)
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await openWorkspaceInputs(page)
   await prepareGuided(page)
-  await page.getByRole('button',{name:'Look up a DNA change',exact:true}).click()
+  await openWorkspaceSources(page)
   await page.getByLabel('Position',{exact:true}).fill('12345')
   const completed=page.waitForResponse(r=>r.url().endsWith(url))
   release();await(await completed).finished()
@@ -115,7 +116,7 @@ test('technical cards show the actual SnpEff summary even when legacy flags are 
   const created=await page.request.post('/api/investigations',{data:input})
   expect(created.ok()).toBe(true)
   const result=await created.json()
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await page.getByLabel('Search investigations').fill(input.title)
   await page.locator('.library-row').filter({hasText:result.id}).getByRole('button',{name:'Open',exact:true}).click()
   await page.getByText('Show technical details',{exact:true}).click()

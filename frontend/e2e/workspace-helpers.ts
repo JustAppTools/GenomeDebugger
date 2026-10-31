@@ -1,5 +1,21 @@
 import type {Page} from '@playwright/test'
 
+export async function openWorkspaceInputs(page:Page) {
+  await page.getByRole('link',{name:'Compare',exact:true}).click()
+  await page.getByRole('button',{name:'Review inputs',exact:true}).click()
+}
+export async function openWorkspaceSources(page:Page) {
+  await page.getByRole('link',{name:'Guide',exact:true}).click()
+  await page.getByRole('button',{name:'Explore a public DNA change',exact:true}).click()
+}
+export async function openWorkspaceAdvanced(page:Page,action:'Saved tests'|'Input JSON'|'Run comparison') {
+  if(await page.getByRole('link',{name:'Guide',exact:true}).getAttribute('aria-current')==='page')await page.getByRole('link',{name:'Compare',exact:true}).click()
+  const summary=page.getByText('Advanced tools',{exact:true})
+  await summary.waitFor({state:'visible'})
+  if(await summary.locator('..').getAttribute('open')===null)await summary.click()
+  await page.getByRole('button',{name:action,exact:true}).click()
+}
+
 // Regression scenarios explicitly opt into the expert controls they exercise.
 // These fixture values are test inputs, not application defaults.
 export async function prepareGuided(page:Page) {

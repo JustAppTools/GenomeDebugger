@@ -29,6 +29,6 @@ test('public help describes browser-scoped links rather than localhost links',as
   vi.stubGlobal('fetch',vi.fn(async(url:string)=>ok(url.endsWith('/health')?{version:'0.6.7',hosted:true}:[])))
   render(<App/> )
   await screen.findByLabelText('Public preview storage')
-  fireEvent.click(screen.getByRole('button',{name:'Help'}))
+  fireEvent.click(screen.getByRole('link',{name:'Guide'}))
   await waitFor(()=>expect(screen.getByText(/A workspace link opens only with this browser/)).toBeInTheDocument())
 })

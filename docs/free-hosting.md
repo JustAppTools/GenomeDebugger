@@ -43,6 +43,6 @@ Select Free compute and keep the Render account without a payment method. Free s
 
 ## Validation and release scope
 
-Application 0.9.0 keeps comparator 0.6.7 and SQLite schema 3. Existing local installations still accept loopback connections only and retain their existing database. Public mode is explicit and refuses to start without an exact HTTPS origin and a sufficiently long session secret.
+Application 0.10.0 keeps comparator 0.6.7 and SQLite schema 3. Its [guided workspace redesign](guided-workspace-0.10.0-2026-10-31.md) retains the hosting/data boundaries introduced in 0.9.0. Existing local installations still accept loopback connections only and retain their existing database. Public mode is explicit and refuses to start without an exact HTTPS origin and a sufficiently long session secret.
 
 Validation logs under `.build/hosting-*` cover backend/unit checks, HTTPS browser isolation, exports/imports, readable reports, and core accessibility. Render successfully built the Docker image and deployed the service. Actual live checks passed for health, comparisons, separate visitor records/notes, saved baseline/replay, report and bundle transfer, backups, and disabled local-only actions. The browser also fetched the public Ensembl example and compared its transcript outputs. The live HTTP summary is retained locally in `.build/render-live-verification.json`; the [deployment report](deployment-2026-10-31.md) records the verified scope.

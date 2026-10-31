@@ -12,7 +12,7 @@ test('core screens pass automated accessibility checks and keyboard skip preserv
   for(const route of ['input','source','help','library','data']){
     await page.goto(`/#/${route}`)
     await expect(page.locator('main h1')).toBeVisible()
-    if(route==='library')await expect(page.getByRole('heading',{name:'Investigation library'})).toBeVisible()
+    if(route==='library')await expect(page.getByRole('heading',{name:'Your saved comparisons'})).toBeVisible()
     await check(page)
   }
   await page.goto('/')

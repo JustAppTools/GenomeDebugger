@@ -1,3 +1,4 @@
+import {openWorkspaceAdvanced,openWorkspaceInputs} from './workspace-helpers'
 import {prepareExample,prepareGuided} from './workspace-helpers'
 import {expect,test,type Page} from '@playwright/test'
 
@@ -26,9 +27,9 @@ test('candidate verdicts identify edits during a run and after it completes',asy
   const baseline=await page.request.post(`/api/investigations/${result.id}/regression-cases`,{data:{name:'Candidate freshness'}})
   expect(baseline.ok()).toBe(true)
   await page.goto('/')
-  await page.getByRole('button',{name:'Saved comparisons',exact:true}).click()
+  await page.getByRole('link',{name:'Saved work',exact:true}).click()
   await page.locator('.library-row').filter({hasText:result.id}).getByRole('button',{name:'Open',exact:true}).click()
-  await page.getByRole('complementary').getByRole('button',{name:'Saved tests',exact:true}).click()
+  await openWorkspaceAdvanced(page,'Saved tests')
   await page.getByRole('button',{name:'Check candidate',exact:true}).waitFor()
   let release:(()=>void)|undefined
   await page.route('**/api/regression-cases/*/runs',async route=>{
@@ -63,7 +64,7 @@ for(const invalidOldFile of [false,true]) {
   test(`the latest input file wins over an earlier ${invalidOldFile?'invalid':'valid'} file read`,async({page})=>{
     const input=await(await page.request.get('/api/demos/transcript-switch')).json()
     await page.goto('/')
-    await page.getByRole('button',{name:'Enter results',exact:true}).click()
+    await openWorkspaceInputs(page)
     await prepareGuided(page)
     await page.evaluate(()=>{
       const original=File.prototype.arrayBuffer
@@ -89,7 +90,7 @@ for(const invalidOldFile of [false,true]) {
 
 test('edits made while an example loads are preserved and explained',async({page})=>{
   await page.goto('/')
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await openWorkspaceInputs(page)
   await prepareGuided(page)
   await page.getByRole('button',{name:'JSON editor',exact:true}).click()
   let release:(()=>void)|undefined
@@ -113,7 +114,7 @@ test('edits made while an example loads are preserved and explained',async({page
 test('typing during a file read keeps the newer guided draft',async({page})=>{
   const input=await(await page.request.get('/api/demos/transcript-switch')).json()
   await page.goto('/')
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await openWorkspaceInputs(page)
   await prepareGuided(page)
   await page.evaluate(()=>{
     File.prototype.arrayBuffer=()=>new Promise<ArrayBuffer>(resolve=>{(window as any).releaseInputFile=resolve})
@@ -130,7 +131,7 @@ test('an input file supersedes a pending example request',async({page})=>{
   const input=await(await page.request.get('/api/demos/transcript-switch')).json()
   input.title='File chosen after example'
   await page.goto('/')
-  await page.getByRole('button',{name:'Enter results',exact:true}).click()
+  await openWorkspaceInputs(page)
   await prepareGuided(page)
   let release:(()=>void)|undefined
   let finished=false
