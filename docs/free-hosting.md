@@ -2,6 +2,8 @@
 
 The public preview runs the React interface and Python API together on a **Render Free web service**, using the root `Dockerfile` and `render.yaml`. The source repository can remain private. GitHub stores the source; Render supplies the running application's HTTPS address. GitHub Pages alone cannot run this backend.
 
+**Live application: [genomedebugger.onrender.com](https://genomedebugger.onrender.com).** Deployed and verified on October 31, 2026. The existing service is Free, with no disk, external database, or payment method. See [deployment details and live verification](deployment-2026-10-31.md). Account connection and initial deployment are complete; the steps below document setup for another installation.
+
 ## Connect the accounts
 
 1. Create a free account at [Render](https://dashboard.render.com/register), using the JustAppTools GitHub account.
@@ -20,10 +22,10 @@ The owner can use [Deploy to Render](https://render.com/deploy?repo=https%3A%2F%
 - No persistent disk, paid database, or separate frontend service.
 - Provider-generated `GENOMEDEBUGGER_SESSION_SECRET`; it never belongs in source control.
 - The public origin comes from Render's `RENDER_EXTERNAL_URL` at runtime.
-- Automatic deployment is off to conserve included build minutes. Deploy a selected commit deliberately when updating.
+- Automatic deployment is off to conserve included build minutes. Blueprint Auto Sync is also off. Deploy a selected commit deliberately when updating.
 - Health check: `/healthz`.
 
-The live link is the literal `onrender.com` address returned by the created service. It is not assigned or verified merely by adding this configuration to GitHub.
+The existing service returned [https://genomedebugger.onrender.com](https://genomedebugger.onrender.com), and its deployed behavior has been verified. Reuse this service for updates rather than creating duplicate resources.
 
 ## Keep the budget at zero
 
@@ -43,4 +45,4 @@ Select Free compute and keep the Render account without a payment method. Free s
 
 Application 0.9.0 keeps comparator 0.6.7 and SQLite schema 3. Existing local installations still accept loopback connections only and retain their existing database. Public mode is explicit and refuses to start without an exact HTTPS origin and a sufficiently long session secret.
 
-Validation logs under `.build/hosting-*` cover backend/unit checks, HTTPS browser isolation, exports/imports, readable reports, and core accessibility. A local Docker engine is unavailable on the development host; image construction must therefore be verified by the hosting provider's build. No successful deployment or live URL is claimed before the service exists and its deployed behavior is checked.
+Validation logs under `.build/hosting-*` cover backend/unit checks, HTTPS browser isolation, exports/imports, readable reports, and core accessibility. Render successfully built the Docker image and deployed the service. Actual live checks passed for health, comparisons, separate visitor records/notes, saved baseline/replay, report and bundle transfer, backups, and disabled local-only actions. The browser also fetched the public Ensembl example and compared its transcript outputs. The live HTTP summary is retained locally in `.build/render-live-verification.json`; the [deployment report](deployment-2026-10-31.md) records the verified scope.

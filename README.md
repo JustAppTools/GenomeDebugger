@@ -2,9 +2,9 @@
 
 ## Public hosted preview
 
-The repository includes a **$0 Render deployment configuration** for the full React/Python comparison workbench. Each visitor has a separate temporary browser workspace; downloaded bundles/reports keep work beyond free-server restarts. See [free hosting and account connection](docs/free-hosting.md). Deployment still requires the owner's Render/GitHub authorization; this repository link alone is not a live application.
+[**Open GenomeDebugger**](https://genomedebugger.onrender.com)
 
-[Deploy the prepared free service](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FJustAppTools%2FGenomeDebugger)
+The full React/Python comparison workbench is live on **Render Free**, with a separate temporary browser workspace for each visitor. The free server can take about a minute to wake up; download full bundles or reports to keep work beyond restarts. See [free hosting and visitor data](docs/free-hosting.md) and the [verified deployment](docs/deployment-2026-10-31.md).
 
 ## Local application
 
