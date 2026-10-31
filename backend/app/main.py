@@ -45,13 +45,22 @@ from pydantic import BaseModel, Field
 from .identifier import IdentifierRequest, resolve_identifier
 from contextlib import asynccontextmanager
 from .workspace_lock import WorkspaceLock
+from .hosting import PublicHosting, REQUEST_DATABASE
 
 BASE = Path(os.environ.get('GENOMEDEBUGGER_RESOURCES', str(Path(__file__).resolve().parents[2])))
 DEMO = BASE / "fixtures" / "transcript-switch.json"
 DB = Path(os.environ.get("GENOMEDEBUGGER_DB", str(BASE / "data" / "investigations.db")))
+HOSTING = PublicHosting.from_environment()
+
+
+def database():
+    return REQUEST_DATABASE.get() or DB
+
+
 @asynccontextmanager
 async def workspace_lifespan(_app):
-    with WorkspaceLock(DB):
+    # Public preview uses one process and request-scoped visitor databases.
+    with WorkspaceLock(HOSTING.root / 'server' if HOSTING.enabled else DB):
         yield
 
 
@@ -87,7 +96,7 @@ def validate_linked_checks(payload: InvestigationInput):
     for snapshot in payload.snapshots:
         source_id = snapshot.provenance.configuration.get("source_record_id")
         if source_id:
-            source = load_source_record(DB, source_id)
+            source = load_source_record(database(), source_id)
             if source is None or snapshot.provenance.input_sha256 != source.source_response_sha256:
                 raise ValueError("Snapshot requires its preserved source record and matching response hash")
             try:
@@ -98,8 +107,8 @@ def validate_linked_checks(payload: InvestigationInput):
                                    ("SnpEff annotation", payload.annotation_check, load_snpeff_check)):
         if summary is None:
             continue
-        check = loader(DB, summary.id)
-        source = load_source_record(DB, summary.source_record_id)
+        check = loader(database(), summary.id)
+        source = load_source_record(database(), summary.source_record_id)
         if check is None or source is None:
             raise ValueError(f"{label} summary requires its preserved source and check records")
         fields = set(type(summary).model_fields)
@@ -137,6 +146,8 @@ async def record_missing_error(_request: Request, exc: RecordMissingError):
 
 @app.middleware("http")
 async def limit_input(request: Request, call_next):
+    if HOSTING.enabled:
+        return await HOSTING.handle(request, lambda req: bounded_call(req, call_next, {HOSTING.origin}))
     client_host = request.client.host if request.client else ""
     try:
         local = ipaddress.ip_address(client_host).is_loopback
@@ -153,10 +164,14 @@ async def limit_input(request: Request, call_next):
     # TestClient's conventional host is never accepted from a real TCP peer.
     if not trusted_host and not (client_host == "testclient" and hostname == "testserver"):
         return JSONResponse(status_code=400, content={"detail": "Untrusted Host header"})
+    return await bounded_call(request, call_next, TRUSTED_BROWSER_ORIGINS)
+
+
+async def bounded_call(request, call_next, origins):
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         origin = request.headers.get("origin")
         same_origin = str(request.base_url).rstrip("/")
-        if ((origin is not None and origin not in TRUSTED_BROWSER_ORIGINS and origin != same_origin) or
+        if ((origin is not None and origin not in origins and origin != same_origin) or
                 (origin is None and request.headers.get("sec-fetch-site") in {"cross-site", "same-site"})):
             return JSONResponse(status_code=403, content={"detail": "Browser origin is not trusted"})
     if request.method == "POST":
@@ -179,14 +194,20 @@ async def limit_input(request: Request, call_next):
     return await call_next(request)
 
 
+@app.get("/healthz")
+def readiness():
+    return {"status": "ok"}
+
+
 @app.get("/api/health")
 def health():
     try:
-        initialize(DB)
+        initialize(database())
     except (OSError, sqlite3.Error) as exc:
         raise HTTPException(status_code=503, detail="Local database unavailable") from exc
     return {"application": "GenomeDebugger", "project_id": hashlib.sha256(str(BASE.resolve()).lower().encode("utf-8")).hexdigest(),
             "status": "ok", "version": ENGINE_VERSION, "app_version":APP_VERSION,
+            **HOSTING.metadata(),
             "limits": {"input_bytes": MAX_INPUT_BYTES, "input_data_bytes": MAX_INPUT_DATA_BYTES, "bundle_bytes": MAX_BUNDLE_BYTES}}
 
 
@@ -207,12 +228,17 @@ def ensembl_example():
 
 @app.get('/api/workspace/data')
 def workspace_data():
-    return {**local_data(DB), 'app_version': APP_VERSION, 'engine_version': ENGINE_VERSION,
+    details = local_data(database())
+    if HOSTING.enabled:
+        details['database_path'] = 'Temporary workspace for this browser'
+    return {**details, **HOSTING.metadata(), 'app_version': APP_VERSION, 'engine_version': ENGINE_VERSION,
             'desktop_mode': getattr(app.state, 'desktop_server', None) is not None}
 
 
 @app.post('/api/workspace/stop')
 def stop_desktop():
+    if HOSTING.enabled:
+        raise HTTPException(status_code=404, detail='Not available in the public preview')
     server = getattr(app.state, 'desktop_server', None)
     if server is None:
         raise HTTPException(status_code=409, detail='Use Stop GenomeDebugger.cmd to stop development services')
@@ -231,14 +257,14 @@ def identifier_preview(payload: IdentifierRequest):
 
 @app.get('/api/workspace/backup')
 def workspace_backup():
-    initialize(DB)
+    initialize(database())
     folder = Path(tempfile.mkdtemp(prefix='genomedebugger-backup-'))
     destination = folder / 'genomedebugger-backup.db'
     def cleanup():
         destination.unlink(missing_ok=True)
         folder.rmdir()
     try:
-        backup(DB, destination)
+        backup(database(), destination)
     except Exception:
         cleanup()
         raise
@@ -259,20 +285,20 @@ def workspace_library(q: str = Query(default='', max_length=200), view: Literal[
                       cursor: str = Query(default='', max_length=4096), ceiling: int | None = Query(default=None, ge=0, le=MAX_SQLITE_INTEGER),
                       since_instant: str = Query(default='', max_length=64)):
     try:
-        return list_library(DB, q, view, favorite, source, since, sort, offset, limit, cursor, ceiling, since_instant)
+        return list_library(database(), q, view, favorite, source, since, sort, offset, limit, cursor, ceiling, since_instant)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get('/api/workspace/library/{id_}/label')
 def workspace_label_details(id_: str):
-    return read_label(DB, id_)
+    return read_label(database(), id_)
 
 
 @app.post('/api/workspace/library/{id_}/label')
 def workspace_label(id_: str, payload: LibraryLabelUpdate):
     try:
-        return save_label(DB, id_, payload)
+        return save_label(database(), id_, payload)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -287,11 +313,11 @@ def export_selected(payload: SelectedExports):
     size = 0
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
         for index, id_ in enumerate(dict.fromkeys(payload.ids)):
-            result = load(DB, id_)
+            result = load(database(), id_)
             if result is None:
                 raise HTTPException(status_code=404, detail='A selected comparison is no longer available')
             try:
-                bundle = create_bundle(DB, result)
+                bundle = create_bundle(database(), result)
             except ValueError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             raw = json.dumps(bundle, ensure_ascii=False).encode('utf-8')
@@ -304,6 +330,8 @@ def export_selected(payload: SelectedExports):
 
 @app.get("/api/tools/snpeff")
 def snpeff_runtime():
+    if HOSTING.enabled:
+        return {'configured': False, 'detail': 'The public preview supports supplied SnpEff output. Run a pinned SnpEff installation with the local app.'}
     return runtime_status()
 
 
@@ -311,7 +339,7 @@ def snpeff_runtime():
 def preserved_sources(limit: int = Query(default=200, ge=1, le=500), offset: int = Query(default=0, ge=0, le=MAX_SQLITE_INTEGER)):
     return [{**record.model_dump(exclude={"source_response","artifact"}),
              "artifact":{key:value for key,value in record.artifact.items() if key!="text"} if record.artifact else None}
-            for record in list_source_records(DB, limit, offset)]
+            for record in list_source_records(database(), limit, offset)]
 
 
 @app.post("/api/sources/historical-vep",response_model=SourceRecord)
@@ -320,15 +348,15 @@ def historical_vep(payload: HistoricalImport):
         record=import_historical(payload)
     except ValueError as exc:
         raise HTTPException(status_code=422,detail=str(exc)) from exc
-    save_source_record(DB,record)
+    save_source_record(database(),record)
     # Re-importing the same artifact retains its original local capture time.
-    return load_source_record(DB, record.id)
+    return load_source_record(database(), record.id)
 
 
 @app.post("/api/sources/compare",response_model=InvestigationResult)
 def compare_source_records(payload: SourcePair):
-    left=load_source_record(DB,payload.source_a)
-    right=load_source_record(DB,payload.source_b)
+    left=load_source_record(database(),payload.source_a)
+    right=load_source_record(database(),payload.source_b)
     if left is None or right is None:
         raise HTTPException(status_code=404,detail="Both preserved source records must exist")
     try:
@@ -338,26 +366,28 @@ def compare_source_records(payload: SourcePair):
         result=compare(investigation_input)
     except ValueError as exc:
         raise HTTPException(status_code=422,detail=str(exc)) from exc
-    save(DB,result)
+    save(database(),result)
     return result
 
 
 @app.post("/api/sources/ensembl/records/{id_}/snpeff-run",response_model=SnpEffCheck)
 def snpeff_local_run(id_: str):
-    record=load_source_record(DB,id_)
+    if HOSTING.enabled:
+        raise HTTPException(status_code=409, detail='Use supplied SnpEff output or run SnpEff with the local app')
+    record=load_source_record(database(),id_)
     if record is None:
         raise HTTPException(status_code=404,detail="Source record not found")
     try:
         check=run_snpeff(record)
     except (ValueError,OSError,KeyError) as exc:
         raise HTTPException(status_code=422,detail=str(exc)) from exc
-    save_snpeff_check(DB,check)
+    save_snpeff_check(database(),check)
     return check
 
 
 @app.post("/api/sources/ensembl/lookup", response_model=SourceLookupResult)
 def ensembl_lookup(payload: SourceLookup):
-    cached = latest_source_record(DB, payload.query)
+    cached = latest_source_record(database(), payload.query)
     if cached is not None:
         try:
             validate_source_assembly(cached)
@@ -375,13 +405,13 @@ def ensembl_lookup(payload: SourceLookup):
         if cached is not None:
             return SourceLookupResult(record=cached, access="cached_after_error", warning=f"Live Ensembl fetch failed: {exc}. Showing the previously retrieved local record.")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    save_source_record(DB, record)
+    save_source_record(database(), record)
     return SourceLookupResult(record=record, access="fetched")
 
 
 @app.get("/api/sources/ensembl/records/{id_}", response_model=SourceRecord)
 def ensembl_record(id_: str):
-    record = load_source_record(DB, id_)
+    record = load_source_record(database(), id_)
     if record is None:
         raise HTTPException(status_code=404, detail="Source record not found")
     return record
@@ -389,10 +419,10 @@ def ensembl_record(id_: str):
 
 @app.post("/api/sources/ensembl/records/{id_}/reference-check", response_model=ReferenceCheckResult)
 def check_ensembl_reference(id_: str, payload: ReferenceCheckRequest):
-    record = load_source_record(DB, id_)
+    record = load_source_record(database(), id_)
     if record is None:
         raise HTTPException(status_code=404, detail="Source record not found")
-    cached = latest_reference_check(DB, id_, validate=lambda check: validate_saved_reference_check(record, check))
+    cached = latest_reference_check(database(), id_, validate=lambda check: validate_saved_reference_check(record, check))
     if payload.mode == "cache_only":
         if cached is None:
             raise HTTPException(status_code=404, detail="No usable local NCBI check is cached for this source record")
@@ -403,13 +433,13 @@ def check_ensembl_reference(id_: str, payload: ReferenceCheckRequest):
         if cached is not None:
             return ReferenceCheckResult(check=cached, access="cached_after_error", warning=f"Live NCBI check failed: {exc}. Showing the previous local check.")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    save_reference_check(DB, check)
+    save_reference_check(database(), check)
     return ReferenceCheckResult(check=check, access="fetched")
 
 
 @app.get("/api/sources/reference-checks/{id_}", response_model=ReferenceCheck)
 def reference_check(id_: str):
-    check = load_reference_check(DB, id_)
+    check = load_reference_check(database(), id_)
     if check is None:
         raise HTTPException(status_code=404, detail="Reference check not found")
     return check
@@ -417,7 +447,7 @@ def reference_check(id_: str):
 
 @app.post("/api/sources/ensembl/records/{id_}/snpeff-check", response_model=SnpEffCheck)
 def snpeff_check(id_: str, payload: SnpEffCheckRequest):
-    record = load_source_record(DB, id_)
+    record = load_source_record(database(), id_)
     if record is None:
         raise HTTPException(status_code=404, detail="Source record not found")
     try:
@@ -425,13 +455,13 @@ def snpeff_check(id_: str, payload: SnpEffCheckRequest):
         check = compare_snpeff(record, payload)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    save_snpeff_check(DB, check)
+    save_snpeff_check(database(), check)
     return check
 
 
 @app.get("/api/sources/ensembl/records/{id_}/snpeff-check", response_model=SnpEffCheck)
 def saved_snpeff_check(id_: str):
-    check = latest_snpeff_check(DB, id_)
+    check = latest_snpeff_check(database(), id_)
     if check is None:
         raise HTTPException(status_code=404, detail="No SnpEff check saved for this record")
     if check.execution:
@@ -444,16 +474,16 @@ def saved_snpeff_check(id_: str):
 
 @app.post("/api/sources/ensembl/records/{id_}/compare", response_model=InvestigationResult)
 def compare_ensembl_transcripts(id_: str, payload: CompareTranscripts):
-    record = load_source_record(DB, id_)
+    record = load_source_record(database(), id_)
     if record is None:
         raise HTTPException(status_code=404, detail="Source record not found")
     try:
         if "reference_check_id" in payload.model_fields_set:
-            check = load_reference_check(DB, payload.reference_check_id) if payload.reference_check_id else None
+            check = load_reference_check(database(), payload.reference_check_id) if payload.reference_check_id else None
             if payload.reference_check_id and (check is None or check.source_record_id != id_):
                 raise ValueError("Selected NCBI check is missing or belongs to a different source record")
         else:
-            check = latest_reference_check(DB, id_, validate=lambda check: validate_saved_reference_check(record, check))
+            check = latest_reference_check(database(), id_, validate=lambda check: validate_saved_reference_check(record, check))
         if check:
             try:
                 validate_saved_reference_check(record, check)
@@ -464,11 +494,11 @@ def compare_ensembl_transcripts(id_: str, payload: CompareTranscripts):
             "expected_reference", "observed_reference", "reference_matches",
             "spdi_matches", "hgvs_matches", "status"})) if check else None
         if "annotation_check_id" in payload.model_fields_set:
-            annotation = load_snpeff_check(DB, payload.annotation_check_id) if payload.annotation_check_id else None
+            annotation = load_snpeff_check(database(), payload.annotation_check_id) if payload.annotation_check_id else None
             if payload.annotation_check_id and (annotation is None or annotation.source_record_id != id_):
                 raise ValueError("Selected SnpEff check is missing or belongs to a different source record")
         else:
-            annotation = latest_snpeff_check(DB, id_)
+            annotation = latest_snpeff_check(database(), id_)
         if annotation and annotation.execution:
             validate_execution_metadata(annotation.execution)
         annotation_summary = AnnotationCheckSummary(
@@ -486,7 +516,7 @@ def compare_ensembl_transcripts(id_: str, payload: CompareTranscripts):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     validate_input_size(investigation_input)
     result = compare(investigation_input)
-    save(DB, result)
+    save(database(), result)
     return result
 
 
@@ -520,25 +550,25 @@ def create_investigation(payload: InvestigationInput):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     result = compare(payload)
-    save(DB, result)
+    save(database(), result)
     return result
 
 
 @app.get("/api/investigations")
 def investigations(q: str = Query(default="", max_length=200), limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0, le=MAX_SQLITE_INTEGER)):
-    return list_items(DB, q, limit, offset)
+    return list_items(database(), q, limit, offset)
 
 
 @app.get('/api/investigations/page')
 def investigation_page(q: str = Query(default='', max_length=200), limit: int = Query(default=100, ge=1, le=500),
                        before: int | None = Query(default=None, ge=1, le=9223372036854775807),
                        ceiling: int | None = Query(default=None, ge=0, le=9223372036854775807)):
-    return list_investigation_page(DB, q, limit, before, ceiling)
+    return list_investigation_page(database(), q, limit, before, ceiling)
 
 
 @app.get("/api/investigations/{id_}", response_model=InvestigationResult)
 def investigation(id_: str):
-    result = load(DB, id_)
+    result = load(database(), id_)
     if result is None:
         raise HTTPException(status_code=404, detail="Investigation not found")
     return result
@@ -546,11 +576,11 @@ def investigation(id_: str):
 
 @app.post("/api/investigations/{id_}/allele-check")
 def check_investigation_alleles(id_: str, payload: ReferenceCheckRequest):
-    result = load(DB, id_)
+    result = load(database(), id_)
     if result is None:
         raise HTTPException(status_code=404, detail="Investigation not found")
     if payload.mode == "cache_only":
-        check = latest_allele_check(DB, id_)
+        check = latest_allele_check(database(), id_)
         if check is None:
             raise HTTPException(status_code=404, detail="No reference-backed allele check is saved for this investigation")
         try:
@@ -562,14 +592,14 @@ def check_investigation_alleles(id_: str, payload: ReferenceCheckRequest):
         check = fetch_allele_check(result)
     except (ReferenceCheckError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    save_allele_check(DB, check)
+    save_allele_check(database(), check)
     return check
 
 
 @app.delete("/api/investigations/{id_}")
 def remove_investigation(id_: str):
     try:
-        removed = delete_investigation(DB, id_)
+        removed = delete_investigation(database(), id_)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not removed:
@@ -579,11 +609,11 @@ def remove_investigation(id_: str):
 
 @app.get("/api/investigations/{id_}/bundle")
 def investigation_bundle(id_: str):
-    result = load(DB, id_)
+    result = load(database(), id_)
     if result is None:
         raise HTTPException(status_code=404, detail="Investigation not found")
     try:
-        return create_bundle(DB, result)
+        return create_bundle(database(), result)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -603,40 +633,40 @@ def bundle_import(payload: dict):
         result, source, check, snpeff, allele_check = verify_bundle(payload)
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    save_bundle_records(DB, result, source, check, snpeff, allele_check)
+    save_bundle_records(database(), result, source, check, snpeff, allele_check)
     return {"imported": result.id}
 
 
 @app.get("/api/investigations/{id_}/report.md", response_class=PlainTextResponse)
 def report(id_: str):
-    result = load(DB, id_)
+    result = load(database(), id_)
     if result is None:
         raise HTTPException(status_code=404, detail="Investigation not found")
-    annotation = load_snpeff_check(DB, result.input.annotation_check.id) if result.input.annotation_check else None
+    annotation = load_snpeff_check(database(), result.input.annotation_check.id) if result.input.annotation_check else None
     source_ids = {s.provenance.configuration.get("source_record_id") for s in result.input.snapshots} - {None}
-    sources = [source for source_id in source_ids if (source := load_source_record(DB, source_id)) is not None]
-    return markdown_report(result, latest_allele_check(DB,result.id), annotation, sources)
+    sources = [source for source_id in source_ids if (source := load_source_record(database(), source_id)) is not None]
+    return markdown_report(result, latest_allele_check(database(),result.id), annotation, sources)
 
 
 @app.post("/api/investigations/{id_}/regression-cases", response_model=RegressionCase)
 def create_regression_case(id_: str, payload: CreateRegressionCase):
-    source = load(DB, id_)
+    source = load(database(), id_)
     if source is None:
         raise HTTPException(status_code=404, detail="Investigation not found")
     case = create_case(source, payload.name)
-    save_case(DB, case)
+    save_case(database(), case)
     return case
 
 
 @app.get("/api/regression-cases")
 def regression_cases(source_investigation_id: str | None = Query(default=None, max_length=100),
                      limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0, le=MAX_SQLITE_INTEGER)):
-    return list_cases(DB, source_investigation_id, limit, offset)
+    return list_cases(database(), source_investigation_id, limit, offset)
 
 
 @app.get("/api/regression-cases/{id_}", response_model=RegressionCase)
 def regression_case(id_: str):
-    case = load_case(DB, id_)
+    case = load_case(database(), id_)
     if case is None:
         raise HTTPException(status_code=404, detail="Regression case not found")
     return case
@@ -644,7 +674,7 @@ def regression_case(id_: str):
 
 @app.post("/api/regression-cases/{id_}/runs", response_model=RegressionRun)
 def run_regression_case(id_: str, payload: RegressionRunRequest):
-    case = load_case(DB, id_)
+    case = load_case(database(), id_)
     if case is None:
         raise HTTPException(status_code=404, detail="Regression case not found")
     if payload.candidate is not None:
@@ -655,24 +685,24 @@ def run_regression_case(id_: str, payload: RegressionRunRequest):
         run = run_case(case, payload.candidate)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    save_run(DB, run)
+    save_run(database(), run)
     return run
 
 
 @app.get("/api/regression-cases/{id_}/runs")
 def regression_runs(id_: str, limit: int = Query(default=100, ge=1, le=500), offset: int = Query(default=0, ge=0, le=MAX_SQLITE_INTEGER),
                     before: str | None = None):
-    if load_case(DB, id_) is None:
+    if load_case(database(), id_) is None:
         raise HTTPException(status_code=404, detail="Regression case not found")
     try:
-        return list_runs(DB, id_, limit, offset, before)
+        return list_runs(database(), id_, limit, offset, before)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/regression-runs/{id_}", response_model=RegressionRun)
 def regression_run(id_: str):
-    run = load_run(DB, id_)
+    run = load_run(database(), id_)
     if run is None:
         raise HTTPException(status_code=404, detail="Regression run not found")
     return run

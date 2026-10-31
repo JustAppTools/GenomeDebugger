@@ -1,5 +1,13 @@
 # Architecture and data model
 
+## Public-preview deployment — application 0.9.0
+
+Local remains the default mode. Explicit public-free mode requires an exact HTTPS origin and a session-signing secret, and holds one server ownership lock. Request context selects a signed browser visitor's SQLite path; handlers do not use the installation database during hosted requests. Static HTML establishes the secure HttpOnly cookie before parallel initial API calls. API responses are no-store and vary by Cookie. Scientific record IDs stay deterministic, but records, labels, source captures, tests, and backups live in separate visitor databases.
+
+The free configuration has no durable disk or external paid database. Server restarts/sleep can clear work; inactive visitor directories expire after 24 hours with active requests protected. Aggregate capacity is bounded and preserves existing download access. Local Java/SnpEff execution and server shutdown are unavailable in the hosted preview; supplied annotation output and public HTTP adapters still work. The frontend explains hosted processing, temporary storage, and explicit bundle/report transfer. The image copies application code, synthetic/public fixtures, and the compiled interface, excluding development databases and credentials.
+
+## Local service
+
 The React/TypeScript frontend submits snapshot input to a loopback FastAPI service. `models.py` owns strict schemas; `engine.py` performs pure deterministic comparisons; `regression.py` builds immutable assertions; `storage.py` persists SQLite; `bundle.py` verifies portable records; `report.py` renders Markdown. Comparison and bundle replay make no network calls.
 
 Explicit source actions use `ensembl.py` for current GRCh38 SNVs, `ncbi.py` for source-bound SNV checks, and `allele_check.py` for reference-backed contextual SPDI/HGVS checks of the two primary alleles. `historical.py` parses original VEP JSON with declared metadata. Historical imports have a separate source kind and never enter the current-source cache.

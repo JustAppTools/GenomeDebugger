@@ -16,3 +16,5 @@
 .simple-welcome .start-options>div{padding:18px}.simple-welcome .start-options h3{margin:12px 0 10px}.simple-welcome .start-options p{line-height:1.6}.simple-welcome .start-options{margin-top:12px}.page-intro{margin-bottom:24px}
 
 .input-toolbar label:focus-within,.bundle-import:focus-within{outline:3px solid #167c76;outline-offset:4px}
+
+.hosted-notice{padding:16px 20px;margin:0 0 22px;border:1px solid #d8b26a;border-radius:10px;background:#fff8e9;color:#614816}.hosted-notice p{margin:6px 0 0;font-size:14px;line-height:1.55}

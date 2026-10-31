@@ -272,6 +272,7 @@ test('library snapshot excludes inserts after another client deletes the newest 
   expect((await page.request.delete('/api/investigations/'+latest)).ok()).toBe(true)
   expect((await page.request.post('/api/investigations',{data:{...input,title:prefix+'concurrent'}})).ok()).toBe(true)
   await page.getByRole('button',{name:'Next records',exact:true}).click()
+  await expect(page.locator('.library-row')).toHaveCount(1)
   await expect(page.locator('.library-row strong')).toHaveText(prefix+'0')
   await page.getByRole('button',{name:'Previous records',exact:true}).click()
   await expect(page.locator('.library-row')).toHaveCount(50)

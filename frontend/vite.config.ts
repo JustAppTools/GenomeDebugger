@@ -11,5 +11,5 @@ export default defineConfig({
     return [{ tag: 'meta', attrs: { name: 'genomedebugger-project', content: projectId }, injectTo: 'head' }]
   } }],
   server: { proxy: { '/api': process.env.GENOMEDEBUGGER_API_URL || 'http://127.0.0.1:8000' } },
-  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'], exclude: ['e2e/**', 'node_modules/**'] }
+  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'], exclude: ['e2e/**', 'e2e-hosting/**', 'node_modules/**'] }
 })

@@ -1,4 +1,10 @@
-# Current state — October 29, 2026
+# Current state — October 31, 2026
+
+Application **0.9.0**, comparator **0.6.7**, SQLite schema **3**. Prepared public hosting with a $0 budget: one Render Free Docker service, no paid storage/database, manual deployments, signed per-browser workspace cookies, isolated temporary SQLite files, explicit storage/server-processing notices, and browser bundle/report transfer. Local mode remains loopback-only and preserves its existing database. See [free hosting and connection instructions](docs/free-hosting.md).
+
+Hosting verification: **479 backend tests**, **74 frontend tests**, production build, and **4 HTTPS hosted-browser workflows** pass. New backend coverage tests visitor isolation, forged cookies, cross-origin writes, concurrent request context, capacity/expiry, exported bundles, and disabled local-only actions. The existing local browser suite passed 117/118 on its initial run; the remaining paging test asserted text before its asynchronous row update. It now waits for the expected row count and its focused rerun passes (`.build/hosting-browser-library-retest.log`). No uninterrupted 118-test pass is claimed for 0.9.0. Docker is unavailable locally; the image build and actual public URL still require provider deployment. No hosting service or paid resource has been created. Render connection/GitHub repository authorization is the remaining deployment prerequisite. The previous source release and its verification are retained below as history.
+
+## Previous release — 0.8.3
 
 Application **0.8.3**, comparator **0.6.7**, SQLite schema **3**. All twelve application bugs in the 0.8.2 audit are repaired, along with the dependency advisory, shared browser-test data, source snapshot, and exceptional backup-cleanup findings. See [repairs and release limits](docs/fixes-0.8.3-2026-10-29.md). Previous audits and fix reports remain historical evidence.
 

@@ -1,6 +1,14 @@
 # GenomeDebugger
 
-GenomeDebugger compares two already analyzed genomic outputs and explains their differences, supporting evidence, and uncertainty. Application **0.8.3** includes guided inputs, supported-file previews, readable evidence and complete HTML reports, draft recovery, an organized library, local bookmarks, and local desktop packaging. It repairs the twelve application defects and engineering findings from the 0.8.2 audit; see [fixes, verification, and release limits](docs/fixes-0.8.3-2026-10-29.md). Comparator **0.6.7** compares complete imported row collections and unordered compound consequence terms, while archived rules preserve historical replay. The tool does **not** diagnose conditions or decide whether a DNA change is harmful.
+## Public hosted preview
+
+The repository includes a **$0 Render deployment configuration** for the full React/Python comparison workbench. Each visitor has a separate temporary browser workspace; downloaded bundles/reports keep work beyond free-server restarts. See [free hosting and account connection](docs/free-hosting.md). Deployment still requires the owner's Render/GitHub authorization; this repository link alone is not a live application.
+
+[Deploy the prepared free service](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FJustAppTools%2FGenomeDebugger)
+
+## Local application
+
+GenomeDebugger compares two already analyzed genomic outputs and explains their differences, supporting evidence, and uncertainty. Application **0.9.0** adds an explicit, isolated public-preview mode while preserving local storage and the 0.8.3 repairs; see [fixes, verification, and release limits](docs/fixes-0.8.3-2026-10-29.md). Comparator **0.6.7** compares complete imported row collections and unordered compound consequence terms, while archived rules preserve historical replay. The tool does **not** diagnose conditions or decide whether a DNA change is harmful.
 
 See the [0.8.0 implementation coverage and remaining dependencies](docs/product-changes-0.8.0-2026-10-26.md), [input/data guide](docs/local-data-and-imports.md), and [desktop package guide](docs/desktop-guide.md).
 

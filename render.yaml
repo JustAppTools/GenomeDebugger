@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: genomedebugger
+    runtime: docker
+    plan: free
+    region: ohio
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: GENOMEDEBUGGER_DEPLOYMENT
+        value: public-free
+      - key: GENOMEDEBUGGER_SESSION_SECRET
+        generateValue: true
+      - key: GENOMEDEBUGGER_MAX_DB_MB
+        value: "16"
+      - key: PORT
+        value: "10000"
