@@ -137,3 +137,7 @@
   .guided-workspace .content {max-width:none;padding:0}
   .guided-workspace {background:#fff}
 }
+
+.clinical-assertions td small{display:block;margin-top:.35rem;color:var(--text-secondary,#46616e)}
+.draft-message:empty{margin:0}
+.report-preview{scroll-margin-top:1rem}

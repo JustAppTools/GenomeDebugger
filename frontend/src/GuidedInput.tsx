@@ -196,14 +196,31 @@ export default function GuidedInput({value,onChange,onRun,busy}:{value:unknown;o
   function focusIssue(message:string){
     setAll(true);setAttempted(true)
     const match=/^Analysis ([12])(?:, variant (\d+))?(?:, annotation (\d+))?: (.+)/.exec(message)
-    let name='Investigation title'
+    let name='Investigation title',side='1'
     if(match){
-      const [,side,variant,annotation,issue]=match
+      const [,analysis,variant,annotation,issue]=match
+      side=analysis
+      const snapshot=input!.snapshots[Number(side)-1]
+      const prefix=`Analysis ${side}${variant?` variant ${variant}`:''}`
       const field=issue.replace(/ is required.*| exceeds.*| must.*| needs.*/,'').replaceAll('_',' ').toLowerCase()
       const target=field.startsWith('alleles')||field.startsWith('reference and')?'reference':field.startsWith('context')?'context start':field.startsWith('reference allele')?'reference sequence':field
-      name=`Analysis ${side}${variant?` variant ${variant}`:''}${annotation?variant?` annotation ${annotation}`:` additional annotation ${Number(annotation)-1}`:''} ${target}`
-    }
-    window.requestAnimationFrame(()=>{const target=[...document.querySelectorAll<HTMLInputElement>('.guided-input input')].find(field=>field.getAttribute('aria-label')===name);target?.focus();target?.scrollIntoView({block:'center'})})
+      name=`${prefix}${annotation?variant?` annotation ${annotation}`:` additional annotation ${Number(annotation)-1}`:''} ${target}`
+      if(issue.startsWith('annotation rows')){
+        const rows=variant?snapshot.variant_records![Number(variant)-2].annotations:[snapshot.annotation,...snapshot.annotations??[]]
+        const keys=rows.map(row=>JSON.stringify([row.gene_id,row.transcript_id,row.clinical?.framework??'',row.clinical?.condition_id??'']))
+        const duplicate=keys.findIndex((key,index)=>keys.indexOf(key)!==index)
+        name=`${prefix}${variant?` annotation ${duplicate+1}`:duplicate?` additional annotation ${duplicate}`:''} gene id`
+      }else if(issue.startsWith('variant representations')){
+        const keys=[snapshot.variant,...(snapshot.variant_records??[]).map(record=>record.variant)].map(v=>JSON.stringify([v.assembly,v.sequence_id,v.position,v.ref,v.alt]))
+        const duplicate=keys.findIndex((key,index)=>keys.indexOf(key)!==index)
+        name=`Analysis ${side} variant ${duplicate+1} sequence accession`
+      }
+    }else if(message==='Analysis IDs must differ')name=''
+    window.requestAnimationFrame(()=>{
+      const target=[...document.querySelectorAll<HTMLInputElement>('.guided-input input')].find(field=>field.getAttribute('aria-label')===name)
+        ??document.querySelector<HTMLElement>(`[data-guide-analysis="${side}"]`)
+      target?.focus();target?.scrollIntoView?.({block:'center'})
+    })
   }
   return <div className="guided-input">
     <div className="guided-intro"><h3>Build a comparison</h3><p>Copy values from two existing analysis outputs. If you do not have the required metadata, ask the person who produced the analysis or use a supported import. No scientific values are filled in by guessing.</p></div>
@@ -213,8 +230,8 @@ export default function GuidedInput({value,onChange,onRun,busy}:{value:unknown;o
     {(step<3||all)&&<div className="guide-grid">{input.snapshots.map((snapshot,index)=>{
       const prefix = `Analysis ${index+1}`
       const side = index===0?'A':'B'
-      return <section key={index} className="guide-card">
-        <h3>Analysis {side}</h3>
+      return <section key={index} className="guide-card" tabIndex={-1} data-guide-analysis={index+1} aria-label={`Analysis ${side} fields`}>
+        <h3>Analysis {side}</h3>{attempted&&<p className="help-copy">Review the linked field or this analysis group. Advanced imported fields, including analysis IDs and clinical assertions, can be edited in JSON mode.</p>}
         <GuideField label="Label" name={`${prefix} label`} value={snapshot.label} hint="Required. Give this analysis a recognizable name, such as the producing tool and release." onChange={text=>edit(next=>{next.snapshots[index].label=text})}/>
         {(step===0||all)&&<><VariantFields value={snapshot.variant} prefix={prefix} onChange={value=>edit(next=>{next.snapshots[index].variant=value})}/>{index===1&&<button className="button secondary" onClick={()=>edit(next=>{next.snapshots[1].variant=structuredClone(next.snapshots[0].variant)})}>Copy confirmed DNA description from analysis A</button>}</>}
         {(step===1||all)&&<><AnnotationFields value={snapshot.annotation} prefix={prefix} onChange={value=>edit(next=>{next.snapshots[index].annotation=value})}/><p className="help-copy">{describeEffect(snapshot.annotation.consequence)}</p></>}

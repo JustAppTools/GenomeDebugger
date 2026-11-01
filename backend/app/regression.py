@@ -54,7 +54,7 @@ class RegressionRun(StrictModel):
     checks: list[RegressionCheck]
     input_changes: list[str]
     actual: InvestigationResult
-    assertion_version: Literal['0.6.7'] | None = None
+    assertion_version: Literal['0.6.7','0.6.8'] | None = None
 
 
 def utc_now() -> str:
@@ -170,14 +170,14 @@ def run_case(case: RegressionCase, candidate: InvestigationInput | None = None, 
         id=uuid4().hex[:16], case_id=case.id, created_at=utc_now(), mode=mode,
         status=status, baseline_input_sha256=baseline.input_sha256,
         candidate_input_sha256=actual_result.input_sha256, checks=checks,
-        input_changes=input_changes, actual=actual_result, assertion_version='0.6.7',
+        input_changes=input_changes, actual=actual_result, assertion_version='0.6.8',
     )
 
 
 def validate_saved_run(case: RegressionCase, record: RegressionRun):
     """Rebuild the complete assertions, without recalculating historical results."""
     from . import legacy_regression_v050, legacy_regression_v063, legacy_regression_v063_linked
-    from . import legacy_regression_v064, legacy_regression_v066
+    from . import legacy_regression_v064, legacy_regression_v066, legacy_regression_v067
     versions = {'0.5.0': [legacy_regression_v050], '0.6.0': [legacy_regression_v063],
                 '0.6.1': [legacy_regression_v063], '0.6.2': [legacy_regression_v063],
                 # Evidence-link assertions shipped without changing comparator
@@ -185,8 +185,10 @@ def validate_saved_run(case: RegressionCase, record: RegressionRun):
                 '0.6.3': [legacy_regression_v063, legacy_regression_v063_linked],
                 '0.6.4': [legacy_regression_v064], '0.6.5': [legacy_regression_v066],
                 '0.6.6': [legacy_regression_v066]}
-    if record.actual.engine_version == '0.6.7' and record.assertion_version == '0.6.7':
+    if record.actual.engine_version == '0.6.8' and record.assertion_version == '0.6.8':
         evaluators = [run_case]
+    elif record.actual.engine_version == '0.6.7' and record.assertion_version == '0.6.7':
+        evaluators = [legacy_regression_v067.run_case]
     elif record.assertion_version is None and record.actual.engine_version in versions:
         evaluators = [rules.run_case for rules in versions[record.actual.engine_version]]
     else:

@@ -159,7 +159,10 @@ def test_capacity_keeps_existing_visitors_readable_and_does_not_evict_active_wor
     assert b.get('/api/health').status_code == 503
     assert a.get(f"/api/investigations/{result['id']}").status_code == 200
     settings.total_bytes = 1
-    assert a.post('/api/investigations',json=result['input']).status_code == 503
+    assert a.post('/api/investigations',json=result['input']).status_code == 200
+    growing = result['input'].copy(); growing['title'] = 'Growing record ' + 'x'*170
+    growing['snapshots'][0]['provenance']['configuration'] = {'padding': 'x'*60000}
+    assert a.post('/api/investigations',json=growing).status_code == 503
     assert a.get('/api/workspace/backup').status_code == 200
 
 
@@ -190,3 +193,99 @@ def test_hosted_configuration_requires_a_secret_and_local_is_default(monkeypatch
     monkeypatch.setenv('GENOMEDEBUGGER_PUBLIC_ORIGIN','https://genomedebugger.example')
     monkeypatch.setenv('GENOMEDEBUGGER_SESSION_SECRET','short')
     with pytest.raises(ValueError):PublicHosting.from_environment()
+
+
+def test_rejected_requests_and_missing_records_do_not_consume_visitor_slots(hosted):
+    settings, client = hosted
+    settings.max_workspaces = 1
+    for _ in range(4):
+        rejected = client()
+        assert rejected.post('/api/investigations', json={}, headers={'Origin':'https://other.example'}).status_code == 403
+        assert rejected.post('/api/investigations', json={}).status_code == 422
+        assert rejected.get('/api/investigations/missing').status_code == 404
+        assert not list(settings.root.glob('*/investigations.db'))
+    assert create(client())['id']
+    assert len(list(settings.root.glob('*/investigations.db'))) == 1
+
+
+def test_transaction_growth_is_rolled_back_at_shared_limit(hosted):
+    settings, client = hosted
+    browser = client(); create(browser)
+    before = settings.allocated_bytes()
+    settings.total_bytes = before + 1
+    payload = json.loads(FIXTURE.read_text(encoding='utf-8'))
+    payload['title'] = 'Transaction that needs new pages'
+    payload['snapshots'][0]['provenance']['configuration'] = {'padding':'x'*60000}
+    response = browser.post('/api/investigations',json=payload)
+    assert response.status_code == 503
+    assert settings.allocated_bytes() == before
+    assert len(browser.get('/api/investigations').json()) == 1
+
+
+def test_full_capacity_allows_exports_deletion_and_reuse(hosted):
+    settings, client = hosted
+    browser = client(); first = create(browser)
+    large = first['input'].copy(); large['title'] = 'Larger disposable record'
+    large['snapshots'][0]['provenance']['configuration'] = {'padding':'x'*60000}
+    second = browser.post('/api/investigations',json=large).json()
+    full = settings.allocated_bytes(); settings.total_bytes = full
+    assert browser.post('/api/workspace/export',json={'ids':[first['id'],second['id']]}).status_code == 200
+    assert browser.get('/api/workspace/backup').status_code == 200
+    assert browser.delete('/api/investigations/'+second['id']).status_code == 200
+    assert settings.allocated_bytes() < full
+    assert create(browser,'Replacement after freeing space')['id']
+    assert settings.allocated_bytes() <= full
+
+
+def test_quota_ignores_transient_journals_during_parallel_writes(hosted,monkeypatch):
+    settings, client = hosted
+    a,b=client(),client();create(a);create(b)
+    original_stat = Path.stat
+    def stat(path,*args,**kwargs):
+        if path.name.endswith('-journal'):
+            raise FileNotFoundError('SQLite journal disappeared during commit')
+        return original_stat(path,*args,**kwargs)
+    monkeypatch.setattr(Path,'stat',stat)
+    def writer(index):
+        browser = a if index % 2 else b
+        return create(browser,f'Parallel write {index}')['id']
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert len(list(pool.map(writer,range(20)))) == 20
+    assert settings.allocated_bytes() <= settings.total_bytes
+
+
+def test_concurrent_new_workspaces_cannot_overallocate_shared_capacity(hosted):
+    settings, client = hosted
+    first=client();first.get('/api/health')
+    allocation=settings.allocated_bytes()
+    settings.total_bytes=allocation*2
+    browsers=[client() for _ in range(4)]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        statuses=list(pool.map(lambda browser:browser.get('/api/health').status_code,browsers))
+    assert statuses.count(200) == 1
+    assert statuses.count(503) == 3
+    assert settings.allocated_bytes() <= settings.total_bytes
+    assert len(list(settings.root.glob('*/investigations.db'))) == 2
+
+
+def test_full_workspace_can_reuse_pages_if_compaction_is_unavailable(hosted,monkeypatch):
+    import sqlite3
+    settings, client = hosted
+    browser=client()
+    payload=json.loads(FIXTURE.read_text(encoding='utf-8'))
+    payload['snapshots'][0]['provenance']['configuration']={'padding':'x'*60000}
+    old=browser.post('/api/investigations',json=payload).json()
+    allocation=settings.allocated_bytes();settings.total_bytes=allocation
+    connect=sqlite3.connect
+    class WithoutVacuum(sqlite3.Connection):
+        def execute(self,sql,*args,**kwargs):
+            if sql == 'VACUUM':
+                raise sqlite3.OperationalError('Injected unavailable compaction space')
+            return super().execute(sql,*args,**kwargs)
+    monkeypatch.setattr(sqlite3,'connect',lambda *args,**kwargs:connect(*args,**dict(kwargs,factory=WithoutVacuum)))
+    assert browser.delete('/api/investigations/'+old['id']).status_code == 200
+    assert settings.allocated_bytes() == allocation
+    payload['title']='Replacement in existing pages'
+    response=browser.post('/api/investigations',json=payload)
+    assert response.status_code == 200, response.text
+    assert settings.allocated_bytes() == allocation

@@ -45,7 +45,7 @@ from pydantic import BaseModel, Field
 from .identifier import IdentifierRequest, resolve_identifier
 from contextlib import asynccontextmanager
 from .workspace_lock import WorkspaceLock
-from .hosting import PublicHosting, REQUEST_DATABASE
+from .hosting import PublicHosting, REQUEST_DATABASE, HostingCapacityError
 
 BASE = Path(os.environ.get('GENOMEDEBUGGER_RESOURCES', str(Path(__file__).resolve().parents[2])))
 DEMO = BASE / "fixtures" / "transcript-switch.json"
@@ -132,6 +132,12 @@ def validate_linked_checks(payload: InvestigationInput):
 @app.exception_handler(StorageLimitError)
 async def storage_limit_error(_request: Request, exc: StorageLimitError):
     return JSONResponse(status_code=507, content={"detail": str(exc)})
+
+
+@app.exception_handler(HostingCapacityError)
+async def hosting_capacity_error(_request: Request, _exc: HostingCapacityError):
+    return JSONResponse({'detail': 'The free preview is at capacity. Download or delete existing work, or try again later.'},
+                        status_code=503, headers={'Cache-Control':'no-store','Retry-After':'60'})
 
 
 @app.exception_handler(RecordConflictError)

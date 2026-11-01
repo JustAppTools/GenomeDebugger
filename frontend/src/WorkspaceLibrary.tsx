@@ -58,7 +58,8 @@ export default function WorkspaceLibrary({onOpen,onDeleted,onImport,onOrganized,
       const response=await fetch(`/api/investigations/${item.id}`,{method:'DELETE'})
       if(!response.ok){const body=await response.json();throw new Error(body.detail||'Deletion failed')}
       drafts.delete(item.id)
-      if(live.current){requestRevision.current++;setEditing(previous=>previous?.id===item.id?null:previous);setLoading(true);setItems(previous=>previous.filter(old=>old.id!==item.id));onDeleted(item.id);setSelected(old=>old.filter(id=>id!==item.id));setRefresh(v=>v+1)}
+      onDeleted(item.id)
+      if(live.current){requestRevision.current++;setEditing(previous=>previous?.id===item.id?null:previous);setLoading(true);setItems(previous=>previous.filter(old=>old.id!==item.id));setSelected(old=>old.filter(id=>id!==item.id));setRefresh(v=>v+1)}
     }catch(e){if(live.current)setError(e instanceof Error?e.message:'Deletion failed')}
     finally{if(live.current)setBusy(false)}
   }

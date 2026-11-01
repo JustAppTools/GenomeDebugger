@@ -19,7 +19,7 @@ def digest(value) -> str:
 
 def canonical_consequence(value: str) -> str:
     """Term collections are unordered; keep original input bytes in snapshots."""
-    terms = re.split(r'[;&,]', value)
+    terms = [term.strip() for term in re.split(r'[;&,]', value)]
     return ';'.join(sorted(set(terms))) if all(terms) else value
 
 

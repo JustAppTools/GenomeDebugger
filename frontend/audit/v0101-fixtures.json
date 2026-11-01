@@ -1,0 +1,486 @@
+{
+  "clinical": {
+    "id": "5d2d7ff28532032a",
+    "engine_version": "0.6.8",
+    "input": {
+      "title": "Synthetic transcript selection discrepancy",
+      "synthetic": true,
+      "snapshots": [
+        {
+          "id": "run-A",
+          "label": "Analysis A · transcript TX-DEMO-1.1",
+          "variant": {
+            "assembly": "GRCh38",
+            "sequence_id": "NC_000001.11",
+            "position": 101,
+            "ref": "AC",
+            "alt": "AT",
+            "reference_context": {
+              "start": 100,
+              "sequence": "GACGTACG"
+            }
+          },
+          "annotation": {
+            "gene_id": "AUDIT_GENE",
+            "transcript_id": "AUDIT_TX",
+            "consequence": "missense_variant",
+            "protein_consequence": null,
+            "clinical": {
+              "framework": "AUDIT_FRAMEWORK",
+              "condition_id": "AUDIT_CONDITION_42",
+              "classification": "benign",
+              "review_status": null,
+              "assertion_date": null
+            }
+          },
+          "annotations": [],
+          "variant_records": [],
+          "provenance": {
+            "tool": "synthetic-lookup",
+            "tool_version": "1.0",
+            "source_name": "GenomeDebugger synthetic fixture",
+            "source_release": "2026-demo-1",
+            "source_uri": null,
+            "input_sha256": null,
+            "configuration": {
+              "mode": "selected-transcript"
+            }
+          }
+        },
+        {
+          "id": "run-B",
+          "label": "Analysis B · transcript TX-DEMO-2.1",
+          "variant": {
+            "assembly": "GRCh38",
+            "sequence_id": "NC_000001.11",
+            "position": 102,
+            "ref": "C",
+            "alt": "T",
+            "reference_context": {
+              "start": 100,
+              "sequence": "GACGTACG"
+            }
+          },
+          "annotation": {
+            "gene_id": "AUDIT_GENE",
+            "transcript_id": "AUDIT_TX",
+            "consequence": "missense_variant",
+            "protein_consequence": null,
+            "clinical": {
+              "framework": "AUDIT_FRAMEWORK",
+              "condition_id": "AUDIT_CONDITION_42",
+              "classification": "pathogenic",
+              "review_status": null,
+              "assertion_date": null
+            }
+          },
+          "annotations": [],
+          "variant_records": [],
+          "provenance": {
+            "tool": "synthetic-lookup",
+            "tool_version": "1.0",
+            "source_name": "GenomeDebugger synthetic fixture",
+            "source_release": "2026-demo-1",
+            "source_uri": null,
+            "input_sha256": null,
+            "configuration": {
+              "mode": "selected-transcript"
+            }
+          }
+        }
+      ],
+      "controlled_lookup": null,
+      "reference_check": null,
+      "annotation_check": null,
+      "meaningful_overrides": {}
+    },
+    "identity": {
+      "status": "verified",
+      "explanation": "Both alleles match the same supplied reference context; trimmed substitution edits match.",
+      "normalized_a": "NC_000001.11:102:C>T",
+      "normalized_b": "NC_000001.11:102:C>T",
+      "evidence_ids": [
+        "identity-inputs"
+      ]
+    },
+    "differences": [
+      {
+        "field": "position",
+        "category": "representation",
+        "before": "101",
+        "after": "102",
+        "meaningful": false,
+        "evidence_ids": [
+          "diff-1"
+        ]
+      },
+      {
+        "field": "ref",
+        "category": "representation",
+        "before": "AC",
+        "after": "C",
+        "meaningful": false,
+        "evidence_ids": [
+          "diff-2"
+        ]
+      },
+      {
+        "field": "alt",
+        "category": "representation",
+        "before": "AT",
+        "after": "T",
+        "meaningful": false,
+        "evidence_ids": [
+          "diff-3"
+        ]
+      },
+      {
+        "field": "clinical.classification",
+        "category": "clinical",
+        "before": "benign",
+        "after": "pathogenic",
+        "meaningful": true,
+        "evidence_ids": [
+          "diff-4"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "status": "unresolved",
+        "cause": "unexplained change",
+        "explanation": "Field differences were observed, but no controlled explanation was established.",
+        "affected_fields": [
+          "clinical.classification"
+        ],
+        "evidence_ids": [
+          "diff-4"
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "id": "identity-inputs",
+        "kind": "input",
+        "description": "Assembly, sequence accession, reference context, and submitted alleles",
+        "data": {
+          "a": {
+            "assembly": "GRCh38",
+            "sequence_id": "NC_000001.11",
+            "position": 101,
+            "ref": "AC",
+            "alt": "AT",
+            "reference_context": {
+              "start": 100,
+              "sequence": "GACGTACG"
+            }
+          },
+          "b": {
+            "assembly": "GRCh38",
+            "sequence_id": "NC_000001.11",
+            "position": 102,
+            "ref": "C",
+            "alt": "T",
+            "reference_context": {
+              "start": 100,
+              "sequence": "GACGTACG"
+            }
+          }
+        }
+      },
+      {
+        "id": "diff-1",
+        "kind": "field_comparison",
+        "description": "Observed position values in the two supplied snapshots",
+        "data": {
+          "field": "position",
+          "a": "101",
+          "b": "102",
+          "snapshot_ids": [
+            "run-A",
+            "run-B"
+          ]
+        }
+      },
+      {
+        "id": "diff-2",
+        "kind": "field_comparison",
+        "description": "Observed ref values in the two supplied snapshots",
+        "data": {
+          "field": "ref",
+          "a": "AC",
+          "b": "C",
+          "snapshot_ids": [
+            "run-A",
+            "run-B"
+          ]
+        }
+      },
+      {
+        "id": "diff-3",
+        "kind": "field_comparison",
+        "description": "Observed alt values in the two supplied snapshots",
+        "data": {
+          "field": "alt",
+          "a": "AT",
+          "b": "T",
+          "snapshot_ids": [
+            "run-A",
+            "run-B"
+          ]
+        }
+      },
+      {
+        "id": "diff-4",
+        "kind": "field_comparison",
+        "description": "Observed clinical.classification values in the two supplied snapshots",
+        "data": {
+          "field": "clinical.classification",
+          "a": "benign",
+          "b": "pathogenic",
+          "snapshot_ids": [
+            "run-A",
+            "run-B"
+          ]
+        }
+      }
+    ],
+    "input_sha256": "2b5b1e6cf5cc9b78e4e98da7e6ff11a6637ab3ff01fcac2eb7c2a75d65fe8985"
+  },
+  "whitespace": {
+    "id": "ce9943af0e356984",
+    "engine_version": "0.6.8",
+    "input": {
+      "title": "Synthetic transcript selection discrepancy",
+      "synthetic": true,
+      "snapshots": [
+        {
+          "id": "run-A",
+          "label": "Analysis A · transcript TX-DEMO-1.1",
+          "variant": {
+            "assembly": "GRCh38",
+            "sequence_id": "NC_000001.11",
+            "position": 101,
+            "ref": "AC",
+            "alt": "AT",
+            "reference_context": {
+              "start": 100,
+              "sequence": "GACGTACG"
+            }
+          },
+          "annotation": {
+            "gene_id": "AUDIT_GENE",
+            "transcript_id": "AUDIT_TX",
+            "consequence": "missense_variant",
+            "protein_consequence": "",
+            "clinical": null
+          },
+          "annotations": [],
+          "variant_records": [],
+          "provenance": {
+            "tool": "synthetic-lookup",
+            "tool_version": "1.0",
+            "source_name": "GenomeDebugger synthetic fixture",
+            "source_release": "2026-demo-1",
+            "source_uri": null,
+            "input_sha256": null,
+            "configuration": {
+              "mode": "selected-transcript"
+            }
+          }
+        },
+        {
+          "id": "run-B",
+          "label": "Analysis B · transcript TX-DEMO-2.1",
+          "variant": {
+            "assembly": "GRCh38",
+            "sequence_id": "NC_000001.11",
+            "position": 102,
+            "ref": "C",
+            "alt": "T",
+            "reference_context": {
+              "start": 100,
+              "sequence": "GACGTACG"
+            }
+          },
+          "annotation": {
+            "gene_id": "AUDIT_GENE",
+            "transcript_id": "AUDIT_TX",
+            "consequence": "missense_variant",
+            "protein_consequence": " ",
+            "clinical": null
+          },
+          "annotations": [],
+          "variant_records": [],
+          "provenance": {
+            "tool": "synthetic-lookup",
+            "tool_version": "1.0",
+            "source_name": "GenomeDebugger synthetic fixture",
+            "source_release": "2026-demo-1",
+            "source_uri": null,
+            "input_sha256": null,
+            "configuration": {
+              "mode": "selected-transcript"
+            }
+          }
+        }
+      ],
+      "controlled_lookup": null,
+      "reference_check": null,
+      "annotation_check": null,
+      "meaningful_overrides": {}
+    },
+    "identity": {
+      "status": "verified",
+      "explanation": "Both alleles match the same supplied reference context; trimmed substitution edits match.",
+      "normalized_a": "NC_000001.11:102:C>T",
+      "normalized_b": "NC_000001.11:102:C>T",
+      "evidence_ids": [
+        "identity-inputs"
+      ]
+    },
+    "differences": [
+      {
+        "field": "position",
+        "category": "representation",
+        "before": "101",
+        "after": "102",
+        "meaningful": false,
+        "evidence_ids": [
+          "diff-1"
+        ]
+      },
+      {
+        "field": "ref",
+        "category": "representation",
+        "before": "AC",
+        "after": "C",
+        "meaningful": false,
+        "evidence_ids": [
+          "diff-2"
+        ]
+      },
+      {
+        "field": "alt",
+        "category": "representation",
+        "before": "AT",
+        "after": "T",
+        "meaningful": false,
+        "evidence_ids": [
+          "diff-3"
+        ]
+      },
+      {
+        "field": "protein_consequence",
+        "category": "annotation",
+        "before": "",
+        "after": " ",
+        "meaningful": true,
+        "evidence_ids": [
+          "diff-4"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "status": "unresolved",
+        "cause": "annotation discrepancy",
+        "explanation": "The supplied snapshots do not establish why the annotation changed. Review variant identity before attributing a same-variant cause.",
+        "affected_fields": [
+          "protein_consequence"
+        ],
+        "evidence_ids": [
+          "diff-4"
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "id": "identity-inputs",
+        "kind": "input",
+        "description": "Assembly, sequence accession, reference context, and submitted alleles",
+        "data": {
+          "a": {
+            "assembly": "GRCh38",
+            "sequence_id": "NC_000001.11",
+            "position": 101,
+            "ref": "AC",
+            "alt": "AT",
+            "reference_context": {
+              "start": 100,
+              "sequence": "GACGTACG"
+            }
+          },
+          "b": {
+            "assembly": "GRCh38",
+            "sequence_id": "NC_000001.11",
+            "position": 102,
+            "ref": "C",
+            "alt": "T",
+            "reference_context": {
+              "start": 100,
+              "sequence": "GACGTACG"
+            }
+          }
+        }
+      },
+      {
+        "id": "diff-1",
+        "kind": "field_comparison",
+        "description": "Observed position values in the two supplied snapshots",
+        "data": {
+          "field": "position",
+          "a": "101",
+          "b": "102",
+          "snapshot_ids": [
+            "run-A",
+            "run-B"
+          ]
+        }
+      },
+      {
+        "id": "diff-2",
+        "kind": "field_comparison",
+        "description": "Observed ref values in the two supplied snapshots",
+        "data": {
+          "field": "ref",
+          "a": "AC",
+          "b": "C",
+          "snapshot_ids": [
+            "run-A",
+            "run-B"
+          ]
+        }
+      },
+      {
+        "id": "diff-3",
+        "kind": "field_comparison",
+        "description": "Observed alt values in the two supplied snapshots",
+        "data": {
+          "field": "alt",
+          "a": "AT",
+          "b": "T",
+          "snapshot_ids": [
+            "run-A",
+            "run-B"
+          ]
+        }
+      },
+      {
+        "id": "diff-4",
+        "kind": "field_comparison",
+        "description": "Observed protein_consequence values in the two supplied snapshots",
+        "data": {
+          "field": "protein_consequence",
+          "a": "",
+          "b": " ",
+          "snapshot_ids": [
+            "run-A",
+            "run-B"
+          ]
+        }
+      }
+    ],
+    "input_sha256": "cfc30ca1abd499de27c8ba266d8758b012deac1e855ed9a3c374198e35523dd4"
+  }
+}

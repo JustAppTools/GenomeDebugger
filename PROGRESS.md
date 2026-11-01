@@ -1,5 +1,13 @@
 # Current state — October 31, 2026
 
+Application **0.10.1**, comparator **0.6.8**, SQLite schema **3**. All fifteen confirmed findings from the 0.10.0 audit are repaired. The update enforces transactional shared hosting quotas, keeps exports/deletion/page reuse available at capacity, corrects navigation and draft accessibility, preserves accurate hosted-storage copy, brings report previews into view, exposes clinical assertion scope, and fixes compound-term whitespace and JSON feedback. See [repair coverage and verification](docs/fixes-0.10.1-2026-10-31.md).
+
+Validation: **491 backend tests**, **90 frontend tests**, production build, npm audit with **zero known vulnerabilities**, and `pip check` pass. The local app runs 0.10.1 / 0.6.8. All **11 original scientific records** retain their IDs and exact stored JSON hashes; a consistent database copy passes complete restore and historical replay validation. Frozen 0.6.7 comparator/assertion modules preserve verification of older bundles and regression runs.
+
+**128 Chromium/WebKit browser scenarios pass in one uninterrupted final run**, and **4 hosted HTTPS workflows** pass. Separate hosted-test output prevents the trace collisions seen in the initial parallel run. Live deployment verification is pending. The existing Render Free service remains the only deployment target; no paid resources are required.
+
+# Previous guided-workspace release — 0.10.0
+
 Application **0.10.0**, comparator **0.6.7**, SQLite schema **3**. The guided workspace replaces the dark sidebar with horizontal Compare / Saved work / Guide navigation, visible comparison steps, clear input paths, warm neutral/plum styling, recent work on the home page, and footer storage/version controls. Result evidence, advanced tools, original JSON, reports, and visitor isolation retain their scope. See [redesign and verification](docs/guided-workspace-0.10.0-2026-10-31.md).
 
 Validation: **479 backend tests**, **74 frontend tests**, production build, **122 Chromium/WebKit scenarios verified across the final run and one focused rerun**, and **4 HTTPS hosted-browser workflows**. The final full browser run passed 121 scenarios; one Windows test worker exited unexpectedly (3221226505) during a file-read race scenario, which then passed in isolation. No uninterrupted 122-scenario pass is claimed. The first browser pass identified an inherited low-contrast record-ID rule, now removed; remaining first-pass failures were navigation-test selectors/timing updated for the new shell. Final 320px/1280px layout and core axe checks pass.

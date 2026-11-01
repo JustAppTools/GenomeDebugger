@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from contextlib import contextmanager, closing
+from contextlib import contextmanager, closing, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from .models import InvestigationResult
@@ -10,6 +10,7 @@ from .ncbi import ReferenceCheck, ReferenceCheckError
 from .snpeff import SnpEffCheck
 from .allele_check import AlleleCheck
 from .timestamps import timestamp_key, legacy_timestamp_key
+from .hosting import REQUEST_HOSTING
 
 
 class StorageLimitError(Exception):
@@ -26,14 +27,22 @@ class RecordMissingError(Exception):
 
 @contextmanager
 def _connection(path: Path):
-    db = sqlite3.connect(path)
-    db.create_function("timestamp_key", 1, legacy_timestamp_key, deterministic=True)
-    db.create_function('unicode_casefold', 1, lambda value: value.casefold(), deterministic=True)
-    try:
-        with db:
-            yield db
-    finally:
-        db.close()
+    settings = REQUEST_HOSTING.get()
+    with settings.quota_lock if settings else nullcontext():
+        if settings and settings.admit(path.parent.name) != path:
+            raise ValueError('Invalid request database')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        db = sqlite3.connect(path)
+        db.create_function("timestamp_key", 1, legacy_timestamp_key, deterministic=True)
+        db.create_function('unicode_casefold', 1, lambda value: value.casefold(), deterministic=True)
+        try:
+            before = db.execute('PRAGMA page_count').fetchone()[0] * db.execute('PRAGMA page_size').fetchone()[0] if settings else 0
+            with db:
+                yield db
+                if settings:
+                    settings.guard_allocation(path, db, before)
+        finally:
+            db.close()
 
 
 def max_database_bytes():
@@ -111,7 +120,6 @@ def _guard_size(path: Path, incoming: str, connection=None):
 
 
 def initialize(path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
     with _connection(path) as db:
         version = db.execute('PRAGMA user_version').fetchone()[0]
         if version >= 3:
@@ -396,6 +404,14 @@ def delete_investigation(path: Path, id_: str) -> bool:
         db.execute('DELETE FROM investigation_labels WHERE investigation_id = ?', (id_,))
         db.execute('DELETE FROM investigation_order WHERE investigation_id = ?', (id_,))
         db.execute("DELETE FROM investigations WHERE id = ?", (id_,))
+        if REQUEST_HOSTING.get():
+            db.commit()
+            try:
+                db.execute('VACUUM')
+            except sqlite3.Error:
+                # Deletion is already durable. Remaining free pages can still
+                # be reused even if temporary space for compaction is absent.
+                pass
         return True
 
 

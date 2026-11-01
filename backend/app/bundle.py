@@ -20,6 +20,7 @@ from .legacy_engine_v063 import compare as compare_v063
 from .legacy_engine_v064 import compare as compare_v064
 from .legacy_engine_v065 import compare as compare_v065
 from .legacy_engine_v066 import compare as compare_v066
+from .legacy_engine_v067 import compare as compare_v067
 from .check_scope import validate_check_variants, validate_annotation_origin, validate_reference_provenance, validate_annotation_provenance, validate_check_annotations
 from .limits import MAX_BUNDLE_BYTES, validate_input_size
 from .version import ENGINE_VERSION
@@ -36,7 +37,7 @@ from .storage import load_reference_check, load_source_record, load_snpeff_check
 BUNDLE_VERSION = 2
 COMPARATORS = {"0.5.0": compare_v050, "0.6.0": compare_v060, "0.6.1": compare_v061,
                "0.6.2": compare_v062, "0.6.3": compare_v063, "0.6.4": compare_v064,
-               "0.6.5": compare_v065, "0.6.6": compare_v066, ENGINE_VERSION: compare}
+               "0.6.5": compare_v065, "0.6.6": compare_v066, "0.6.7": compare_v067, ENGINE_VERSION: compare}
 
 
 class BundleManifest(StrictModel):

@@ -8,6 +8,7 @@ import GuidedInput, { blankInput, isGuidedInput, normalizeGuidedInput, validateG
 import InvestigationLibrary,{type LibraryEditDraft} from './WorkspaceLibrary'
 import AlleleCheckPanel from './AlleleCheckPanel'
 import ResultsSummary from './ResultsSummary'
+import ClinicalAssertions from './ClinicalAssertions'
 import { MAX_BUNDLE_BYTES, MAX_INPUT_BYTES } from './limits'
 import EvidenceInspector from './EvidenceInspector'
 import ImportWorkspace from './ImportWorkspace'
@@ -123,7 +124,9 @@ export default function App() {
   const [recent, setRecent] = useState<{id:string;title:string;display_name?:string;archived?:boolean;created_at?:string|null}[]>([])
   const deletedRecent = useRef(new Set<string>())
   const recentMetadataRevision=useRef(0)
-  const parsed = useMemo(() => { try { return normalizeGuidedInput(JSON.parse(inputText)) as InvestigationInput } catch { return null } }, [inputText])
+  const parsedState = useMemo(() => { try { return {valid:true,value:normalizeGuidedInput(JSON.parse(inputText))} } catch { return {valid:false,value:null} } }, [inputText])
+  const parsed=parsedState.value as InvestigationInput|null
+  const jsonObject=parsed!==null&&typeof parsed==='object'&&!Array.isArray(parsed)
   const guidedInvalid = inputMode === 'guided' && validateGuidedInput(parsed).length > 0
   const inputChanged = result !== null && inputSignature(inputText)!==inputSignature(comparedDraft.current)
   const routeHandler=useRef<()=>void>(()=>{})
@@ -239,7 +242,7 @@ export default function App() {
       if(draftVersion!==draftRevision.current){setNotice('Your input changed while the example was loading. Your draft was kept; try the example again when ready.');return}
       const submittedText = JSON.stringify(body,null,2)
       setInputText(submittedText)
-      setResult(null);  setInputMode('json'); setTab('input')
+      setResult(null);  setInputMode('json'); setTab('input');routeTo('input',null)
       setOperation('Comparing teaching analyses')
       const comparison = await fetch(`${API}/investigations`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
       if (!comparison.ok) throw new Error(`Demo comparison failed (${comparison.status})`)
@@ -272,7 +275,8 @@ export default function App() {
     const revision=++selection.current;pendingOpen.current=null
     setOperation('Comparing supplied analysis outputs');setBusy(true); setError('')
     try {
-      if (!parsed) throw new Error('Input is not valid JSON.')
+      if (!parsedState.valid) throw new Error('Input is not valid JSON.')
+      if (!jsonObject) throw new Error('Enter a two-analysis JSON object before comparing.')
       const submittedText = inputText
       const response = await fetch(`${API}/investigations`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(parsed)})
       if (!response.ok) { const detail = await response.json(); throw new Error(response.status===422 ? `Schema validation failed: ${validationMessage(detail.detail)}` : detail.detail || `Comparison failed (${response.status})`) }
@@ -363,7 +367,7 @@ export default function App() {
     <main className="main" id="main-content" tabIndex={-1}>
       <div className={`content ${tab==='overview'&&!result?'start-content':''}`}><div className="workspace-status"><span>{inComparison?result?.input.title:'Understand analysis differences'}</span><span className="local-badge"><span className={`online-dot ${engineState}`}/> {engineState==='online'?(hosted?'Preview engine connected':'Local engine connected'):engineState==='offline'?(hosted?'Preview engine offline':'Local engine offline'):(hosted?'Checking preview engine':'Checking local engine')}</span></div><div className="page-intro"><div><span className="eyebrow accent">{tab==='overview'&&!result?'A clearer view of your analysis':'Your comparison workspace'}</span><h1 tabIndex={-1}>{sectionTitle[tab]}</h1><p>{tab==='source'?'Capture current public predictions, then choose two outputs to compare.':tab==='library'?'Reopen, organize, and download your comparisons.':tab==='help'?'Find your starting point and understand the terms.':tab==='data'?'Your storage, backups, and data choices.':tab==='input'?'Import the original outputs or enter their reported values. Check both analyses before comparing.':result?'Follow the differences, their supporting evidence, and the limits of the explanation.':'Bring two analysis outputs. Follow the evidence behind their differences.'}</p></div>{inComparison&&<div className="intro-actions"><button className="button secondary" onClick={newComparison}>New comparison</button><button className="text-button" onClick={copyLocalLink}>{hosted?'Copy workspace link':'Copy local link'}</button></div>}</div>
       {!['library','help','data'].includes(tab)&&<ComparisonSteps tab={tab} hasResult={!!result} onChoose={chooseInputs} onReview={startInput} onUnderstand={()=>selectTab('overview')}/>}
-      {inComparison&&<nav className="comparison-sections" aria-label="This comparison"><div>{([{tab:'overview',name:'Summary'},{tab:'differences',name:`Changes ${result?.differences.length??0}`},{tab:'evidence',name:'Supporting details'}] as const).map(section=><button key={section.tab} aria-current={tab===section.tab?'page':undefined} onClick={()=>selectTab(section.tab)}>{section.name}</button>)}</div><details key={tab}><summary>Advanced tools</summary><div><button onClick={()=>selectTab('regression')}>Saved tests</button><button onClick={()=>{setInputMode('json');selectTab('input')}}>Input JSON</button><button onClick={run} disabled={busy||!parsed||guidedInvalid}>Run comparison</button></div></details></nav>}
+      {inComparison&&<nav className="comparison-sections" aria-label="This comparison"><div>{([{tab:'overview',name:'Summary'},{tab:'differences',name:`Changes ${result?.differences.length??0}`},{tab:'evidence',name:'Supporting details'}] as const).map(section=><button key={section.tab} aria-current={tab===section.tab?'page':undefined} onClick={()=>selectTab(section.tab)}>{section.name}</button>)}</div><details key={tab}><summary>Advanced tools</summary><div><button onClick={()=>selectTab('regression')}>Saved tests</button><button onClick={()=>{setInputMode('json');selectTab('input')}}>Input JSON</button><button onClick={run} disabled={busy||!jsonObject||guidedInvalid}>Run comparison</button></div></details></nav>}
       {error&&<div role="alert" className="error"><Info size={17}/><span>{error}</span><button className="text-button" onClick={()=>selectTab('help')}>Input and recovery help</button></div>}{notice&&<div role="status" className="input-notice">{notice}</div>}
       {hosted&&<aside className="hosted-notice" aria-label="Public preview storage"><div><strong>Public preview · temporary storage</strong><span>Inputs are processed on this server. Download bundles or reports to keep your work.</span></div><details><summary>About this workspace</summary><p>This browser has its own workspace. Free hosting can clear saved work when the server sleeps or restarts; inactive workspaces expire after 24 hours. A copied link does not transfer your records to another visitor.</p></details></aside>}
       <OperationStatus active={busy} label={operation}><button className="text-button" onClick={()=>{selection.current++;pendingOpen.current=null;setBusy(false);setNotice('Stopped waiting for the response. This does not cancel work already running on the server. Check Saved work before retrying.')}}>Stop waiting</button></OperationStatus>
@@ -372,6 +376,7 @@ export default function App() {
       {result&&!['source','library','help','data'].includes(tab)&&inputChanged&&<div className="input-notice" role="status">Your input has changed. The displayed comparison uses the previous input; compare again to update it.</div>}
       {result&&tab==='overview'&&a&&b&&<>
         <ResultsSummary result={result} onChanges={()=>selectTab('differences')} onEvidence={inspectEvidence}/>
+        <ClinicalAssertions result={result}/>
         <SourceProvenance result={result}/>
         <VariantReview key={result.id} result={result}/>
         {result.input.synthetic&&<ExampleGuide result={result} busy={busy} onMatching={()=>void loadExampleVariant('matching')} onUncertain={()=>void loadExampleVariant('uncertain')} onSwitch={()=>void loadDemo()}/>}
@@ -381,18 +386,19 @@ export default function App() {
         {reportPreview&&<ReadableReport result={result} onClose={()=>setReportPreview(false)} onDownload={()=>download(`genomedebugger-${result.id}-report.html`,reportHtml(result),'text/html')}/>}
       </>}
       {result&&tab==='overview'&&!result.input.synthetic&&<details className="technical-comparison"><summary>Optional reference check (advanced)</summary><AlleleCheckPanel key={result.id} id={result.id} synthetic={result.input.synthetic}/></details>}
-      {result&&tab==='differences'&&<DifferenceTable differences={result.differences} onEvidence={inspectEvidence}/>}
+      {!result&&['differences','evidence','regression'].includes(tab)&&<section className="panel"><h2>Choose a comparison first</h2><p>Open saved work or choose inputs to see changes, supporting details, and tests.</p><div className="source-actions"><button className="button primary" onClick={()=>selectTab('library')}>Open saved work</button><button className="button secondary" onClick={()=>selectTab('overview')}>Choose inputs</button></div></section>}
+      {result&&tab==='differences'&&<><ClinicalAssertions result={result} compact/><DifferenceTable differences={result.differences} onEvidence={inspectEvidence}/></>}
       {result&&tab==='evidence'&&<EvidenceInspector result={result} selected={selectedEvidence} onSelect={setSelectedEvidence}/>}
       {result&&tab==='regression'&&<RegressionPanel key={result.id} result={result} drafts={regressionDrafts.current}/>}
       {(tab==='source'||sourceVisited)&&<div hidden={tab!=='source'}><PublicSourcePanel active={tab==='source'} onCompare={next=>{if(visibleSelection!==selection.current||visibleDraft!==draftRevision.current)return;setInputText(JSON.stringify(next.input,null,2));showResult(next)}}/></div>}
       {tab==='library'&&<InvestigationLibrary drafts={libraryDrafts.current} onOpen={openInvestigation} onImport={file=>{void importBundle(file)}} onOrganized={item=>refreshRecentMetadata(item.id)} onDeleted={id=>{recentMetadataRevision.current++;deletedRecent.current.add(id);setRecent(previous=>previous.filter(item=>item.id!==id));if(pendingOpen.current===id){selection.current++;pendingOpen.current=null;setBusy(false)};setResult(previous=>previous?.id===id?null:previous)}}/>}
       {tab==='help'&&<HelpPanel hosted={hosted} onInput={startInput} onSource={()=>selectTab('source')}/>}
-      {tab==='data'&&<LocalDataPanel/>}
+      {tab==='data'&&<LocalDataPanel hosted={hosted||engineState==='online'?hosted:undefined}/>}
       {tab==='input'&&<section className="panel input-panel"><div className="panel-heading"><div><span className="eyebrow">Original analysis outputs</span><h2>The two results to compare</h2><p>Import supported outputs, or copy values from the original analyses. Advanced JSON preserves all supported fields.</p></div></div>
         <ImportWorkspace onSources={()=>selectTab('source')} onUse={input=>{setGuideSession(value=>value+1);setInputText(JSON.stringify(input,null,2));setInputMode('guided')}}/>
         <DraftTools onSavedChange={setSavedDraftAvailable} text={inputText} onRestore={restoreDraft} onUndo={()=>historyEdit('undo')} onRedo={()=>historyEdit('redo')} canUndo={undoStack.current.length>0} canRedo={redoStack.current.length>0}/>
         <div className="input-toolbar"><button className={inputMode==='guided'?'selected':''} onClick={openGuided}>Guided form</button><button className={inputMode==='json'?'selected':''} onClick={()=>setInputMode('json')}>JSON editor</button><label className="button secondary">Import JSON<input aria-label="Import input JSON" type="file" accept=".json,application/json" onChange={e=>{const file=e.target.files?.[0];if(file)void loadInputFile(file);e.target.value=''}}/></label></div>
-        {inputMode==='guided'?<GuidedInput key={guideSession} value={parsed} onChange={next=>{setInputText(JSON.stringify(next,null,2))}} onRun={run} busy={busy}/>:<><label htmlFor="investigation-json" className="editor-label">Advanced two-analysis input (JSON)</label><textarea id="investigation-json" aria-label="Investigation JSON" spellCheck={false} value={inputText} onChange={e=>{setInputText(e.target.value)}} placeholder="Import a supported input document, or copy its documented structure…"/><div className="editor-foot"><span>{inputText?parsed?<><Check size={15}/> Valid JSON · schema checked on submit</>:'Invalid JSON':'No input loaded'}</span><a href="/api/demos/transcript-switch" target="_blank" rel="noreferrer">View example schema</a></div>{isGuidedInput(parsed)&&<details className="readiness-review"><summary>Review imported analysis metadata</summary>{parsed.snapshots.map(s=><p key={s.id}>{s.label}: {s.variant.assembly} {s.variant.sequence_id}:{s.variant.position} {s.variant.ref}→{s.variant.alt} · {s.provenance.tool} {s.provenance.tool_version} · {s.provenance.source_name} {s.provenance.source_release}</p>)}<p>Schema and linked-evidence checks still run on submission. Missing reference context can leave identity unresolved.</p></details>}<button className="button primary" onClick={run} disabled={!parsed||busy}>Compare</button></>}
+        {inputMode==='guided'?<GuidedInput key={guideSession} value={parsed} onChange={next=>{setInputText(JSON.stringify(next,null,2))}} onRun={run} busy={busy}/>:<><label htmlFor="investigation-json" className="editor-label">Advanced two-analysis input (JSON)</label><textarea id="investigation-json" aria-label="Investigation JSON" spellCheck={false} value={inputText} onChange={e=>{setInputText(e.target.value)}} placeholder="Import a supported input document, or copy its documented structure…"/><div className="editor-foot"><span>{inputText?parsedState.valid?<><Check size={15}/> {jsonObject?'Valid JSON · schema checked on submit':'Valid JSON · enter a two-analysis object'}</>:'Invalid JSON':'No input loaded'}</span><a href="/api/demos/transcript-switch" target="_blank" rel="noreferrer">View example schema</a></div>{isGuidedInput(parsed)&&<details className="readiness-review"><summary>Review imported analysis metadata</summary>{parsed.snapshots.map(s=><p key={s.id}>{s.label}: {s.variant.assembly} {s.variant.sequence_id}:{s.variant.position} {s.variant.ref}→{s.variant.alt} · {s.provenance.tool} {s.provenance.tool_version} · {s.provenance.source_name} {s.provenance.source_release}</p>)}<p>Schema and linked-evidence checks still run on submission. Missing reference context can leave identity unresolved.</p></details>}<button className="button primary" onClick={run} disabled={!parsedState.valid||!jsonObject||busy}>Compare</button></>}
         <div className="source-actions input-example"><button className="text-button" onClick={loadDemo} disabled={busy}>Try example again</button><button className="text-button" onClick={()=>selectTab('help')}>Where do these values come from?</button></div>
       </section>}
       <WorkspaceFooter hosted={hosted} engineState={engineState} engineVersion={engineVersion} onData={()=>selectTab('data')}/></div>

@@ -8,6 +8,7 @@ const python=path.join(root,'.venv',process.platform==='win32'?'Scripts/python.e
 const baseURL='https://127.0.0.1:8444'
 export default defineConfig({
   testDir:'./e2e-hosting',workers:1,timeout:30_000,
+  outputDir:path.join(root,'.build','playwright-hosted-results'),
   use:{baseURL,ignoreHTTPSErrors:true,browserName:'chromium',trace:'retain-on-failure'},
   webServer:{
     command:`"${python}" -m uvicorn app.main:app --host 127.0.0.1 --port 8444 --ssl-keyfile "${path.join(root,'.build/hosting-tls/key.pem')}" --ssl-certfile "${path.join(root,'.build/hosting-tls/cert.pem')}"`,

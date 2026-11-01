@@ -21,7 +21,7 @@ export function WorkspaceHeader({tab,resultId,onNavigate,onHome}:{tab:Tab;result
 }
 
 export function ComparisonSteps({tab,hasResult,onChoose,onReview,onUnderstand}:{tab:Tab;hasResult:boolean;onChoose:()=>void;onReview:()=>void;onUnderstand:()=>void}) {
-  const active=tab==='source'||(tab==='overview'&&!hasResult)?0:tab==='input'?1:2
+  const active=tab==='input'?1:!hasResult||tab==='source'?0:2
   return <nav className="comparison-steps" aria-label="Comparison steps"><ol>
     {[{name:'Choose inputs',action:onChoose},{name:'Review inputs',action:onReview},{name:'Understand',action:onUnderstand}].map((step,index)=><li key={step.name}><button aria-current={active===index?'step':undefined} onClick={step.action} disabled={index===2&&!hasResult}><span aria-hidden="true">{index+1}</span>{step.name}</button></li>)}
   </ol></nav>

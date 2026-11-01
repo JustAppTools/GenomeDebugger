@@ -17,6 +17,24 @@ def literal(value) -> str:
     return re.sub(r'(?<!\w)_|_(?!\w)', r'\\_', text)
 
 
+def displayed(value) -> str:
+    if value is None:
+        return 'Not provided'
+    if value == '':
+        return 'Empty text'
+    if isinstance(value, str) and not value.strip():
+        return 'Whitespace only'
+    return literal(value)
+
+
+def annotation_text(row) -> str:
+    text = f"{literal(row.gene_id)}, {literal(row.transcript_id)}, {literal(row.consequence)}; protein: {displayed(row.protein_consequence)}"
+    if row.clinical:
+        c = row.clinical
+        text += f"; clinical assertion as supplied: framework {literal(c.framework)}; condition {literal(c.condition_id)}; classification {literal(c.classification)}; review status {displayed(c.review_status)}; assertion date {displayed(c.assertion_date)}"
+    return text
+
+
 def code(value) -> str:
     text = ' '.join(str(value).splitlines())
     # Use HTML only for unusual values that could terminate a Markdown span.
@@ -49,19 +67,18 @@ def markdown_report(result: InvestigationResult, allele_check: AlleleCheck | Non
     ]
     for snapshot in (a, b):
         p = snapshot.provenance
-        lines.extend([f"### {literal(snapshot.label)} ({code(snapshot.id)})", "", f"Variant: {literal(snapshot.variant.assembly)} {literal(snapshot.variant.sequence_id)}:{literal(snapshot.variant.position)} {literal(snapshot.variant.ref)}>{literal(snapshot.variant.alt)}  ", f"Annotation: {literal(snapshot.annotation.gene_id)}, {literal(snapshot.annotation.transcript_id)}, {literal(snapshot.annotation.consequence)}  ", f"Software: {literal(p.tool)} {literal(p.tool_version)}; source: {literal(p.source_name)} {literal(p.source_release)}  ", f"Source URI: {literal(p.source_uri or 'not supplied')}  ", f"Source response SHA-256: {literal(p.input_sha256 or 'not supplied')}  ", f"Configuration: {code(p.configuration)}", ""])
+        lines.extend([f"### {literal(snapshot.label)} ({code(snapshot.id)})", "", f"Variant: {literal(snapshot.variant.assembly)} {literal(snapshot.variant.sequence_id)}:{literal(snapshot.variant.position)} {literal(snapshot.variant.ref)}>{literal(snapshot.variant.alt)}  ", f"Annotation: {annotation_text(snapshot.annotation)}  ", f"Software: {literal(p.tool)} {literal(p.tool_version)}; source: {literal(p.source_name)} {literal(p.source_release)}  ", f"Source URI: {literal(p.source_uri or 'not supplied')}  ", f"Source response SHA-256: {literal(p.input_sha256 or 'not supplied')}  ", f"Configuration: {code(p.configuration)}", ""])
         for row in snapshot.annotations:
-            lines.extend([f"Additional annotation: {literal(row.gene_id)}, {literal(row.transcript_id)}, {literal(row.consequence)}  "])
+            lines.extend([f"Additional annotation: {annotation_text(row)}  "])
         for record in snapshot.variant_records:
             v=record.variant
             lines.extend([f"Additional variant: {literal(v.assembly)} {literal(v.sequence_id)}:{literal(v.position)} {literal(v.ref)}>{literal(v.alt)}  "])
-            lines.extend(f"Annotation: {literal(row.gene_id)}, {literal(row.transcript_id)}, {literal(row.consequence)}  " for row in record.annotations)
+            lines.extend(f"Annotation: {annotation_text(row)}  " for row in record.annotations)
     lines.extend(["## Variant identity", "", f"**{literal(result.identity.status.upper())}** — {literal(result.identity.explanation)}", "", "## Differences", ""])
     if result.differences:
         lines.extend(["| Field | Before | After | Important by comparison rules | Evidence |", "|---|---|---|---|---|"])
         for d in result.differences:
-            safe = lambda x: x if x is not None else "—"
-            lines.append(f"| {literal(safe(d.field))} | {literal(safe(d.before))} | {literal(safe(d.after))} | {literal('yes' if d.meaningful else 'no')} | {literal(', '.join(d.evidence_ids))} |")
+            lines.append(f"| {literal(d.field)} | {displayed(d.before)} | {displayed(d.after)} | {literal('yes' if d.meaningful else 'no')} | {literal(', '.join(d.evidence_ids))} |")
     else:
         lines.append("No field differences detected.")
     lines.extend(["", "## Findings", ""])

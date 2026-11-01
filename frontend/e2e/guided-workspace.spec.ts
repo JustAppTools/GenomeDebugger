@@ -31,8 +31,8 @@ test('the explanation, evidence, advanced inputs and application version stay re
   await expect(page).toHaveURL(deepLink)
   await openWorkspaceAdvanced(page,'Input JSON')
   await expect(page.getByLabel('Investigation JSON')).toHaveValue(/Synthetic transcript/)
-  await page.getByText('GenomeDebugger v0.10.0',{exact:true}).click()
-  await expect(page.getByText('Comparison engine v0.6.7',{exact:true})).toBeVisible()
+  await page.getByText('GenomeDebugger v0.10.1',{exact:true}).click()
+  await expect(page.getByText('Comparison engine v0.6.8',{exact:true})).toBeVisible()
 })
 
 for(const width of [320,1280])test(`starting paths and utilities fit at ${width}px and pass core accessibility checks`,async({page})=>{
