@@ -1,5 +1,7 @@
 # Public deployment — October 31, 2026
 
+This records the initial 0.9.0 deployment. The subsequent [0.10.0 guided workspace release](guided-workspace-0.10.0-2026-10-31.md) is now live on the same Free service.
+
 [Open GenomeDebugger](https://genomedebugger.onrender.com)
 
 The full React/Python application is live on one Render **Free** Docker web service in Ohio. Application 0.9.0, comparator 0.6.7, SQLite schema 3. The GitHub source repository remains private; the application is publicly accessible.

@@ -25,4 +25,14 @@ Comparator 0.6.7 and SQLite schema 3 are unchanged. Navigation does not change s
 - HTTPS public mode: **4 passed**, including visitor isolation, readable reports, bundle transfer, and data-screen accessibility (`.build/guided-browser-hosted.log`).
 - Local services restarted at 0.10.0. All 11 original scientific records retain their IDs and stored-result hashes.
 
-The tested source is prepared for manual publication to the existing Render Free service. The running commit and actual public checks will be recorded after Render reports it live. No payment method, paid resource, or duplicate service is required.
+## Live publication
+
+[Open GenomeDebugger](https://genomedebugger.onrender.com). The redesign is deployed on the existing **Free** service `srv-dbj5biff3r2c73f0bdsg`, with the same manual-update configuration and no added resources.
+
+- Running source: `c47c5f813d981911e7f5eab91a663d4aa1e04734` from GitHub `main`.
+- [Render deployment](https://dashboard.render.com/web/srv-dbj5biff3r2c73f0bdsg/deploys/dep-dbj5ugflk1mc738bhr50): **live**, successful Docker build and health checks.
+- Actual public checks passed for application 0.10.0 / engine 0.6.7, new frontend assets, synthetic comparisons, visitor record isolation, Markdown report, and explicit bundle transfer. Summary: `.build/guided-live-verification.json`.
+- Browser confirmed the horizontal navigation, three input paths, connected preview engine, temporary storage notice, and visible application version.
+- Later documentation-only commits do not automatically redeploy the service. No payment method, paid resource, or duplicate service was added.
+
+![Published guided workspace](images/genomedebugger-0.10.0-live.jpg)
