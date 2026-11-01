@@ -4,7 +4,7 @@ Application **0.10.1**, comparator **0.6.8**, SQLite schema **3**. All fifteen c
 
 Validation: **491 backend tests**, **90 frontend tests**, production build, npm audit with **zero known vulnerabilities**, and `pip check` pass. The local app runs 0.10.1 / 0.6.8. All **11 original scientific records** retain their IDs and exact stored JSON hashes; a consistent database copy passes complete restore and historical replay validation. Frozen 0.6.7 comparator/assertion modules preserve verification of older bundles and regression runs.
 
-**128 Chromium/WebKit browser scenarios pass in one uninterrupted final run**, and **4 hosted HTTPS workflows** pass. Separate hosted-test output prevents the trace collisions seen in the initial parallel run. Live deployment verification is pending. The existing Render Free service remains the only deployment target; no paid resources are required.
+**128 Chromium/WebKit browser scenarios pass in one uninterrupted final run**, and **4 hosted HTTPS workflows** pass. Separate hosted-test output prevents the trace collisions seen in the initial parallel run. The same release is **live at [genomedebugger.onrender.com](https://genomedebugger.onrender.com)** on the existing Render Free service. Source `e2a5f713df26958dbc6a96885bd5575687f4988a`, deployment `dep-dbj9p6nlk1mc738kvrkg`, completed successfully. Live synthetic checks pass for versions/assets, comparisons, compound-term whitespace, clinical report scope, blank-value distinctions, visitor isolation, and explicit bundle transfer. Browser checks confirm preview focus/placement and capture the live interface. No new runtime error logs were returned during verification. No paid resources or new service were created.
 
 # Previous guided-workspace release — 0.10.0
 

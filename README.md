@@ -4,7 +4,7 @@
 
 [**Open GenomeDebugger**](https://genomedebugger.onrender.com)
 
-The full React/Python comparison workbench is live on **Render Free**, with a separate temporary browser workspace for each visitor. The free server can take about a minute to wake up; download full bundles or reports to keep work beyond restarts. See [free hosting and visitor data](docs/free-hosting.md) and the [verified deployment](docs/deployment-2026-10-31.md).
+The full React/Python comparison workbench is live on **Render Free**, with a separate temporary browser workspace for each visitor. The free server can take about a minute to wake up; download full bundles or reports to keep work beyond restarts. See [free hosting and visitor data](docs/free-hosting.md) and the [latest verified release](docs/fixes-0.10.1-2026-10-31.md).
 
 ## Local application
 

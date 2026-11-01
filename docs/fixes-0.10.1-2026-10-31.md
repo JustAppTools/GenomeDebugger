@@ -44,6 +44,12 @@ Tests use isolated databases and synthetic/public fixtures. Capacity stress and 
 
 ## Deployment and release scope
 
-The existing Render Free service is the intended deployment target: [genomedebugger.onrender.com](https://genomedebugger.onrender.com). No paid service, database or disk is required. Automatic deployments and Blueprint sync remain off; updates are deployed deliberately. Hosted records are still temporary; visitors should download reports or full bundles for retention.
+**Live: [genomedebugger.onrender.com](https://genomedebugger.onrender.com).** The existing Free service `srv-dbj5biff3r2c73f0bdsg` successfully deployed source `e2a5f713df26958dbc6a96885bd5575687f4988a` through deployment `dep-dbj9p6nlk1mc738kvrkg`. It finished in about 45 seconds, on October 31, 2026 (America/Chicago). The runtime reports application 0.10.1 / engine 0.6.8.
+
+Actual public HTTPS checks pass for the compiled UI assets, runtime versions, synthetic comparisons, compound-term whitespace, clinical condition/framework in Markdown, empty/whitespace distinctions, visitor record isolation, and explicit bundle transfer (`.build/fix0101-live-verification.json`). The browser ran the built-in example and confirmed that report focus moves to its preview; the preview starts at about 16 px and its iframe at about 197 px in the 720 px viewport. No new application error logs were returned during this verification window.
+
+![Verified live report preview](images/genomedebugger-0.10.1-live-report.jpg)
+
+GitHub main also contains the later documentation-only verification commit. Automatic deployments remain disabled, so it does not trigger another deploy. No paid service, database or disk is required. Automatic deployments and Blueprint sync remain off; updates are deployed deliberately. Hosted records are still temporary; visitors should download reports or full bundles for retention.
 
 The shared transaction guard is designed for the existing single-process public service. Multiple independent server processes sharing this workspace directory would require cross-process admission coordination. This update does not enable that deployment mode.

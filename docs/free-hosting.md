@@ -2,7 +2,7 @@
 
 The public preview runs the React interface and Python API together on a **Render Free web service**, using the root `Dockerfile` and `render.yaml`. The source repository can remain private. GitHub stores the source; Render supplies the running application's HTTPS address. GitHub Pages alone cannot run this backend.
 
-**Live application: [genomedebugger.onrender.com](https://genomedebugger.onrender.com).** Deployed and verified on October 31, 2026. The existing service is Free, with no disk, external database, or payment method. See [deployment details and live verification](deployment-2026-10-31.md). Account connection and initial deployment are complete; the steps below document setup for another installation.
+**Live application: [genomedebugger.onrender.com](https://genomedebugger.onrender.com).** Current application 0.10.1 / engine 0.6.8; see [audit repairs and live verification](fixes-0.10.1-2026-10-31.md). Deployed and verified on October 31, 2026. The existing service is Free, with no disk, external database, or payment method. See [deployment details and live verification](deployment-2026-10-31.md). Account connection and initial deployment are complete; the steps below document setup for another installation.
 
 ## Connect the accounts
 
